@@ -6,7 +6,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 CODE = 'xmwprogramgantt'
-VERSION = '1.0.0'
+VERSION = '1.0.1'
 files = [
     'extension/custom/program/ext/model/class/programgantt.class.php',
     'extension/custom/program/ext/control/gantt.php',
@@ -35,6 +35,13 @@ zentao:
   incompatible: ""
 '''
 with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
+    # ZenTao derives REMOVE_PATH from the FIRST entry, including its dirname.
+    # An explicit root directory must precede nested files so upload/install
+    # strip only this wrapper, preserving doc/ and extension/custom/ paths.
+    wrapper = zipfile.ZipInfo(f'{CODE}/', (2026, 11, 14, 0, 0, 0))
+    wrapper.external_attr = (0o40755 << 16) | 0x10
+    archive.writestr(wrapper, b'')
+
     def add(name, data):
         info = zipfile.ZipInfo(f'{CODE}/{name}', (2026, 11, 14, 0, 0, 0))
         info.compress_type = zipfile.ZIP_DEFLATED
