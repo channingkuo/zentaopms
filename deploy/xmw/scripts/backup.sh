@@ -11,7 +11,7 @@ resume_services() {
     trap - EXIT
     if ((${#running_services[@]})); then
         printf '恢复备份前运行的服务……\n'
-        if ! compose start --wait --wait-timeout "$START_TIMEOUT" "${running_services[@]}"; then
+        if ! compose up -d --no-recreate --no-deps --pull never --wait --wait-timeout "$START_TIMEOUT" "${running_services[@]}"; then
             printf '服务恢复失败，请执行 ./deploy.sh up。\n' >&2
             result=1
         fi
