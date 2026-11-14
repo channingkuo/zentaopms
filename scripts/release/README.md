@@ -1,12 +1,24 @@
 # XMW Release
 
-基于官方源码标签 `zentaopms_22.7_20261103`，将包含本工作流的提交推送为 `22.7` 标签后自动构建发布。Release 标题为 `22.7-XMW`；重新运行该标签的工作流会先完成构建和测试，再删除同标签的旧 Release 并发布新资产，源码标签保留。可重新运行该标签已有的 Actions 运行记录。若工作流也已合入默认分支，可选择该标签手动运行；分支上的手动运行不会发布。
+基于官方源码标签 `zentaopms_22.7_20261103`，支持以下发布入口：
+
+- PR 合并到 `release/22.7-xmw` 后自动触发，直接推送该分支也会触发。读取合并提交的 `VERSION`，生成 `22.7-xmw-<提交 SHA 前 12 位>` 标签，Release 标题为 `22.7-XMW (<提交 SHA 前 12 位>)`。每个新提交拥有独立 Release，不会移动原来的 `22.7` 标签。
+- 推送与 `VERSION` 一致的数字版本标签（如 `22.7`）仍自动发布，Release 标题仍为 `22.7-XMW`。自动生成的 `*-xmw-*` 标签不触发第二次构建。
+- 可重跑已有 Actions 运行记录。若工作流也已合入默认分支，可手动选择 `release/22.7-xmw` 或数字版本标签运行；其他分支不发布。
+
+构建固定检出触发事件对应的提交，分支继续前进不会改变本次构建来源。两种 Docker 存储后端的构建和 smoke 测试全部通过后才创建分支发布标签、上传资产并发布。重跑同一提交或同一版本标签时，会在验证成功后替换同标签的旧 Release，源码标签保留；若已有分支发布标签指向其他提交则拒绝发布。包内 `docs/BUILD.txt` 和 Release 说明记录完整源码提交。
+
+涉及本工作流或发布脚本的 PR 在合并前仅运行发布逻辑校验，不构建镜像、不创建标签或 Release；关闭但未合并 PR 也不会触发发布。
 
 默认从官方 Docker Hub 镜像站 `easysoft/zentao:22.7` 拉取官方镜像，数据库固定 `mariadb:10.11.19`。本包封装官方二进制镜像，**不会将此仓库源码重新编译进镜像**。如需发布二次开发代码，应另行增加源码镜像构建流程。
 
 本地构建与联调：
 
 ```bash
+# 不访问 GitHub 或 Docker 的发布逻辑回归
+bash scripts/release/test-prepare-release.sh
+python3 scripts/release/test-publish-release.py
+
 bash scripts/release/build-xmw.sh
 bash scripts/release/smoke-xmw.sh dist/zentao-22.7-linux-amd64-offline.tar.gz
 ```
