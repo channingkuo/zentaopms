@@ -1,0 +1,80 @@
+name: Program Gantt regression
+
+on:
+  pull_request:
+    paths:
+      - 'extension/custom/**/programgantt*'
+      - 'extension/custom/program/ext/control/gantt*.php'
+      - 'extension/custom/program/ext/ui/gantt.html.php'
+      - 'tests/program-gantt/**'
+      - 'scripts/program-gantt/**'
+      - '.github/workflows/program-gantt.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      mariadb:
+        image: mariadb:10.11.19
+        env:
+          MARIADB_ROOT_PASSWORD: gantt-ci
+          MARIADB_DATABASE: zentao_gantt_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install PHP test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-mysql php-mbstring php-xml php-curl php-gd php-zip mariadb-client
+      - name: Initialize disposable test database
+        env:
+          MYSQL_PWD: gantt-ci
+        run: |
+          set -euo pipefail
+          sed 's/__DATABASE__/zentao_gantt_test/g' db/zentao.sql > "$RUNNER_TEMP/gantt-schema.sql"
+          mariadb -h 127.0.0.1 -u root zentao_gantt_test < "$RUNNER_TEMP/gantt-schema.sql"
+          mariadb -h 127.0.0.1 -u root zentao_gantt_test -e "INSERT INTO zt_company(name,admins) VALUES ('Gantt CI','')"
+          cat > config/my.php <<'PHP'
+          <?php
+          $config->installed = true;
+          $config->debug = 2;
+          $config->requestType = 'GET';
+          $config->db->host = '127.0.0.1';
+          $config->db->port = '3306';
+          $config->db->name = 'zentao_gantt_test';
+          $config->db->user = 'root';
+          $config->db->password = 'gantt-ci';
+          $config->db->encoding = 'utf8mb4';
+          $config->db->prefix = 'zt_';
+          $config->webRoot = '/';
+          $config->default->lang = 'zh-cn';
+          PHP
+          cp config/my.php test/config/my.php
+      - name: Lint and test hierarchy, permissions, date updates and exports
+        run: |
+          set -euo pipefail
+          find extension/custom/program extension/custom/common extension/custom/group -name '*.php' -exec php -l '{}' +
+          node --check extension/custom/program/ext/js/gantt/programgantt.ui.js
+          node tests/program-gantt/frontend.test.cjs
+          php tests/program-gantt/backend.php
+          python3 scripts/program-gantt/package.py
+          php tests/program-gantt/package.php
+          git diff --check
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: xmw-program-gantt
+          path: |
+            dist/xmwprogramgantt-1.0.0.zip
+            dist/xmwprogramgantt-1.0.0.zip.sha256
+          if-no-files-found: error
