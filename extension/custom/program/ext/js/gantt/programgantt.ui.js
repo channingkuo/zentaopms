@@ -133,7 +133,9 @@
 
     function mount(root, options)
     {
-        const lang = options.lang, nodes = options.nodes;
+        const lang = options.lang;
+        let nodes = options.nodes, disposed = false;
+        const requests = new AbortController();
         const dates = nodes.flatMap(node => [date(node.begin), date(node.end)]).filter(value => value !== null);
         const first = dates.length ? dates.reduce((a, b) => Math.min(a, b)) : today() - 14 * DAY;
         const last = dates.length ? dates.reduce((a, b) => Math.max(a, b)) : today() + 60 * DAY;
@@ -157,7 +159,7 @@
             values.forEach(([value, text]) => { const option = el('option', '', text); option.value = value; input.append(option); });
             input.value = initial; input.addEventListener('change', () => onChange(input.value)); labeled(container, label, input); return input;
         };
-        select(toolbar, lang.program, [['', lang.all], ...nodes.filter(node => node.type === 'program').map(node => [node.id, node.name])], state.scope, value => { state.scope = value; render(); });
+        const scopeSelect = select(toolbar, lang.program, [['', lang.all], ...nodes.filter(node => node.type === 'program').map(node => [node.id, node.name])], state.scope, value => { state.scope = value; render(); });
         select(toolbar, lang.status, ['all','unclosed','wait','doing','suspended','closed'].map(value => [value, lang[value === 'all' ? 'allStatus' : value]]), state.status, value => { state.status = value; render(); });
         select(toolbar, '', ['day','week','month','quarter'].map(value => [value, lang[value]]), state.scale, value => { state.scale = value; render(); });
         const search = el('input', 'form-control'); search.type = 'search'; search.placeholder = lang.search;
@@ -192,9 +194,44 @@
             try { if(document.fullscreenElement) await document.exitFullscreen(); else await root.requestFullscreen(); }
             catch(error) { message(error.message, true); }
         }));
-        controls.append(button(lang.refresh, () => location.reload()));
-        if(options.canEdit) checkbox(lang.editing, 'editing');
-        if(options.canExport) controls.append(button(lang.png, () => exportChart('png')), button(lang.pdf, () => exportChart('pdf')));
+        controls.append(button(lang.refresh, refreshChart));
+        const capabilities = el('span', 'pg-capabilities'); controls.append(capabilities);
+        function updateCapabilities()
+        {
+            capabilities.replaceChildren();
+            if(options.canEdit) checkbox(lang.editing, 'editing', capabilities);
+            else state.editing = false;
+            if(options.canExport) capabilities.append(button(lang.png, () => exportChart('png')), button(lang.pdf, () => exportChart('pdf')));
+        }
+        updateCapabilities();
+
+        async function refreshChart()
+        {
+            if(state.busy || disposed) return;
+            state.busy = true;
+            message(lang.refreshing);
+            const inputs = [...root.querySelectorAll('.pg-toolbar input,.pg-toolbar select,.pg-toolbar button')];
+            inputs.forEach(input => { input.disabled = true; });
+            try
+            {
+                const result = await request(options.dataURL);
+                if(disposed || !root.isConnected) return;
+                Object.assign(options, result.options);
+                nodes = result.options.nodes;
+                if(state.scope && !nodes.some(node => node.id === state.scope)) state.scope = '';
+                scopeSelect.replaceChildren();
+                [['', lang.all], ...nodes.filter(node => node.type === 'program').map(node => [node.id, node.name])].forEach(([value, text]) =>
+                {
+                    const item = el('option', '', text); item.value = value; scopeSelect.append(item);
+                });
+                scopeSelect.value = state.scope;
+                state.collapsed = new Set([...state.collapsed].filter(id => nodes.some(node => node.id === id)));
+                updateCapabilities();
+                render();
+            }
+            catch(error) { if(!disposed) message(lang.refreshFailed, true); }
+            finally { state.busy = false; inputs.forEach(input => { input.disabled = false; }); }
+        }
 
         const columns = () => [{key: 'name', text: lang.name, width: 300},
             ...(state.owner ? [{key: 'owner', text: lang.owner, width: 115}] : []),
@@ -212,7 +249,7 @@
         };
         function render()
         {
-            if(!root.isConnected) return;
+            if(disposed || !root.isConnected) return;
             const scroll = {top: viewport.scrollTop, left: viewport.scrollLeft};
             rows = visibleRows(nodes, state);
             rangeStart = date(state.begin); rangeEnd = date(state.end); px = scaleWidth();
@@ -322,7 +359,7 @@
         }
         async function request(url, body)
         {
-            const response = await fetch(url, {method: body ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store',
+            const response = await fetch(url, {method: body ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store', signal: requests.signal,
                 headers: {'X-Requested-With': 'XMLHttpRequest'}, ...(body ? {body: new URLSearchParams(body)} : {})});
             if(!response.ok) throw new Error(lang.networkError);
             const result = await response.json();
@@ -457,12 +494,42 @@
             finally { state.busy = false; inputs.forEach(input => { input.disabled = false; }); }
         }
         render();
+        return {destroy()
+        {
+            disposed = true;
+            requests.abort();
+            observer.disconnect();
+            clearTimeout(searchTimer);
+            if(dialog.open) dialog.close();
+        }};
     }
-    /* Zin replaces the page content before running the method scripts. */
+    /* Zin partial navigation executes pageJS BEFORE replacing #main. */
     const options = typeof programGanttOptions !== 'undefined' ? programGanttOptions : global.programGanttOptions;
     if(options)
     {
-        const root = document.getElementById('programGantt');
-        if(root) mount(root, options);
+        let instance, mountedRoot, active = true;
+        const initialize = () =>
+        {
+            if(!active) return;
+            const root = document.getElementById('programGantt');
+            if(!root || !root.isConnected || (root === mountedRoot && root.querySelector('.pg-toolbar'))) return;
+            if(instance) instance.destroy();
+            instance = mount(root, options);
+            mountedRoot = root;
+        };
+        const previousRender = global.afterPageRender, previousUnmount = global.onPageUnmount;
+        global.afterPageRender = function(...args)
+        {
+            if(typeof previousRender === 'function') previousRender(...args);
+            initialize();
+        };
+        global.onPageUnmount = function(...args)
+        {
+            active = false;
+            if(instance) instance.destroy();
+            if(typeof previousUnmount === 'function') previousUnmount(...args);
+        };
+        /* Also support first full-page rendering, without mounting an old root. */
+        queueMicrotask(initialize);
     }
 })(typeof window !== 'undefined' ? window : globalThis);

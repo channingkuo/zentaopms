@@ -16,6 +16,11 @@ if(($argv[1] ?? '') === 'cleanup')
 {
     if(!is_file($stateFile)) exit;
     $state = json_decode(file_get_contents($stateFile), true);
+    if(!empty($state['adminAccount']))
+    {
+        $admins = array_filter(explode(',', $app->company->admins), fn($account) => $account !== $state['adminAccount']);
+        $dao->update(TABLE_COMPANY)->set('admins')->eq(',' . implode(',', $admins) . ',')->where('id')->eq($app->company->id)->exec();
+    }
     $actions = $dao->select('id')->from(TABLE_ACTION)->where('actor')->in($state['accounts'])->fetchPairs('id','id');
     $dao->delete()->from(TABLE_HISTORY)->where('action')->in($actions)->exec();
     $dao->delete()->from(TABLE_ACTION)->where('id')->in($actions)->exec();
@@ -33,6 +38,10 @@ if(($argv[1] ?? '') === 'cleanup')
     exit;
 }
 if(is_file($stateFile)) die("Clean up the existing fixture first.\n");
+$setting = $tester->loadModel('setting');
+$setting->updateVersion($config->version);
+$setting->setItem('system.common.global.flow', 'full');
+$setting->setItem('system.common.global.mode', 'ALM');
 $state = array('accounts'=>array(), 'groups'=>array(), 'projects'=>array(), 'tasks'=>array(), 'sessions'=>array());
 $insert = function(string $table,array $row) use($dao): int
 {
@@ -54,10 +63,17 @@ for($i=0;$i<34;$i++)
         'estStarted'=>$i==1 ? null : '2026-03-01','deadline'=>$i==1 ? null : '2026-03-10'));
 }
 $rights=array('index'=>array('index'), 'my'=>array('index'),'program'=>array('browse','gantt','ganttEdit','ganttExport'), 'project'=>array('browse','index','edit'), 'execution'=>array('all','task','edit'), 'task'=>array('view','edit'));
-foreach(array('editor','reader') as $role)
+foreach(array('editor','reader','admin') as $role)
 {
     $account='gantt_'.$role.'_'.$tag; $state['accounts'][]=$account;
     $userID=$insert(TABLE_USER,array('account'=>$account,'realname'=>'Gantt '.$role,'password'=>md5(bin2hex(random_bytes(24))),'visions'=>'rnd','role'=>'dev','deleted'=>0));
+    if($role === 'admin')
+    {
+        $state['adminAccount'] = $account;
+        $app->company->admins = ',' . implode(',', array_filter(explode(',', $app->company->admins))) . ',' . $account . ',';
+        $dao->update(TABLE_COMPANY)->set('admins')->eq($app->company->admins)->where('id')->eq($app->company->id)->exec();
+        $dao->update(TABLE_PROJECT)->set('PM')->eq($account)->where('id')->eq($project)->exec();
+    }
     $group=$insert(TABLE_GROUP,array('name'=>'Gantt '.$tag.' '.$role,'vision'=>'rnd'));$state['groups'][]=$group;
     $insert(TABLE_USERGROUP,array('account'=>$account,'group'=>$group));
     foreach($rights as $module=>$methods) foreach($methods as $method)

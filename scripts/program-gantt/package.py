@@ -2,11 +2,14 @@
 """Build a local-install ZenTao extension ZIP with an explicit file allowlist."""
 from pathlib import Path
 import hashlib
+import re
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 CODE = 'xmwprogramgantt'
-VERSION = '1.0.1'
+VERSION = (ROOT / 'scripts/program-gantt/VERSION').read_text().strip()
+if not re.fullmatch(r'\d+\.\d+\.\d+', VERSION):
+    raise SystemExit('Invalid plugin VERSION')
 files = [
     'extension/custom/program/ext/model/class/programgantt.class.php',
     'extension/custom/program/ext/control/gantt.php',

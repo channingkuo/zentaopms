@@ -83,8 +83,14 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  plugin:
+    needs: prepare
+    uses: ./.github/workflows/program-gantt.yml
+    with:
+      source_sha: ${{ needs.prepare.outputs.source_sha }}
+
   release:
-    needs: [prepare, package]
+    needs: [prepare, package, plugin]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -97,6 +103,10 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093a # v4.3.0
         with:
           name: xmw-offline
+          path: dist
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093a # v4.3.0
+        with:
+          name: xmw-program-gantt
           path: dist
       - name: Publish tested release (replace on rerun)
         env:

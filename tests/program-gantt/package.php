@@ -3,8 +3,8 @@
 /** Test the actual upload/install extractor, compatibility check and payload copy. */
 require dirname(__DIR__, 2) . '/test/lib/init.php';
 $code = 'xmwprogramgantt';
-$zipPath = $argv[1] ?? dirname(__DIR__, 2) . '/dist/' . $code . '-1.0.1.zip';
-$expectedVersion = $argv[2] ?? '1.0.1';
+$expectedVersion = $argv[2] ?? trim(file_get_contents(dirname(__DIR__, 2) . '/scripts/program-gantt/VERSION'));
+$zipPath = $argv[1] ?? dirname(__DIR__, 2) . '/dist/' . $code . '-' . $expectedVersion . '.zip';
 $tester->loadModel('extension');
 if(!class_exists('extension', false)) require dirname(__DIR__, 2) . '/module/extension/control.php';
 require_once dirname(__DIR__, 2) . '/module/extension/zen.php';
