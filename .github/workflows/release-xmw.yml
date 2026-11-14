@@ -28,6 +28,8 @@ jobs:
           set -euo pipefail
           [[ "$TAG" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]
           test "$(cat VERSION)" = "$TAG"
+      - name: Test Compose command compatibility
+        run: bash scripts/release/test-compose.sh
       - name: Build offline bundle
         run: bash scripts/release/build-xmw.sh
       - name: Test actual exported images and persistence

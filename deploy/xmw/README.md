@@ -1,7 +1,7 @@
 # 禅道 22.7-XMW 离线一键部署包（Linux amd64）
 
 包含官方禅道 22.7、MariaDB 10.11.19 完整镜像，无需服务器访问镜像仓库。
-需要 x86_64 Linux、Docker Engine、Compose v2.24+、Bash、util-linux、GNU coreutils 和 tar。
+需要 x86_64 Linux、Docker Engine、Compose >= 2.24（支持插件和独立版，包括 v5）、Bash、util-linux、GNU coreutils 和 tar。
 
 ```bash
 sha256sum -c zentao-22.7-linux-amd64-offline.tar.gz.sha256
@@ -23,7 +23,9 @@ BACKUP_DIR=../zentao-backups
 
 例如在 `/data-8t/zentao/zentao-deploy` 下部署，三个目录分别为 `/data-8t/zentao/zentao-data`、`/data-8t/zentao/zentao-logs`、`/data-8t/zentao/zentao-backups`。已有 `.env` 不会被覆盖，已有数据不会自动迁移。
 
-如果出现 `unknown flag: --short` 或提示缺少 Compose，请先运行 `docker compose version` 检查插件。此包需要 Compose >= 2.24，不能使用旧版 `docker-compose` v1。Ubuntu/Debian 在配置了 Docker 官方软件源后可以安装：
+脚本优先使用 `docker compose` 插件，找不到兼容版本时自动使用独立版 `docker-compose`。运行 `docker compose version` 或 `docker-compose version`，任一输出 Compose >= 2.24 即可（例如独立版 v5.6.0）；不支持旧版 v1。
+
+两种命令都不可用时，Ubuntu/Debian 在配置了 Docker 官方软件源后可以安装插件：
 
 ```bash
 sudo apt-get update

@@ -3,7 +3,8 @@ set -Eeuo pipefail
 shopt -s extglob
 DEPLOY_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 fail() { printf '错误：%s\n' "$*" >&2; exit 1; }
-compose() { docker compose --project-directory "$DEPLOY_ROOT" --env-file "$DEPLOY_ROOT/.env" -f "$DEPLOY_ROOT/compose.yaml" -p "$COMPOSE_PROJECT_NAME" "$@"; }
+COMPOSE_CMD=(docker compose)
+compose() { "${COMPOSE_CMD[@]}" --project-directory "$DEPLOY_ROOT" --env-file "$DEPLOY_ROOT/.env" -f "$DEPLOY_ROOT/compose.yaml" -p "$COMPOSE_PROJECT_NAME" "$@"; }
 trim() { REPLY=${1##+([[:space:]])}; REPLY=${REPLY%%+([[:space:]])}; }
 load_env() {
     [[ -f "$DEPLOY_ROOT/.env" ]] || cp "$DEPLOY_ROOT/.env.example" "$DEPLOY_ROOT/.env"
@@ -40,14 +41,25 @@ load_env() {
     [[ "$DATA_DIR/" != "$LOG_DIR/"* && "$LOG_DIR/" != "$DATA_DIR/"* && "$BACKUP_DIR/" != "$DATA_DIR/"* && "$DATA_DIR/" != "$BACKUP_DIR/"* && "$BACKUP_DIR/" != "$LOG_DIR/"* && "$LOG_DIR/" != "$BACKUP_DIR/"* ]] || fail '数据、日志、备份目录不能相同或相互包含。'
 }
 require_docker() {
-    command -v docker >/dev/null || fail '请先安装 Docker Engine 和 Docker Compose v2 插件，见 README.md。'
+    command -v docker >/dev/null || fail '请先安装 Docker Engine 和 Compose >= 2.24（插件或独立版），见 README.md。'
     docker info >/dev/null 2>&1 || fail '无法连接 Docker，请启动 Docker 服务，或使用 sudo ./deploy.sh up。'
     local ver major minor
-    ver=$(docker compose version 2>/dev/null) || fail '未检测到 Docker Compose v2 插件。请安装 Compose >= 2.24，并确认 docker compose version 可用，见 README.md。'
-    [[ "$ver" =~ ^Docker[[:space:]]Compose[[:space:]]version[[:space:]]v?([0-9]+)\.([0-9]+) ]] || fail '无法识别 Compose 版本。请确认 docker compose version 输出 Docker Compose version v2.24 或更高版本。'
-    major=${BASH_REMATCH[1]}; minor=${BASH_REMATCH[2]}
-    ((major > 2 || major == 2 && minor >= 24)) || fail '需要 Docker Compose >= 2.24。'
-    [[ $(uname -m) == x86_64 ]] || fail '此离线包需要 x86_64 服务器。'
+    local command
+    for command in plugin standalone; do
+        if [[ "$command" == plugin ]]; then
+            COMPOSE_CMD=(docker compose)
+        else
+            COMPOSE_CMD=(docker-compose)
+        fi
+        ver=$("${COMPOSE_CMD[@]}" version 2>/dev/null) || continue
+        [[ "$ver" =~ ^Docker[[:space:]]Compose[[:space:]]version[[:space:]]v?([0-9]+)\.([0-9]+) ]] || continue
+        major=${BASH_REMATCH[1]}; minor=${BASH_REMATCH[2]}
+        if ((major > 2 || major == 2 && minor >= 24)); then
+            [[ $(uname -m) == x86_64 ]] || fail '此离线包需要 x86_64 服务器。'
+            return 0
+        fi
+    done
+    fail '需要 Docker Compose >= 2.24。支持 docker compose 插件或独立版 docker-compose（含 v5）；不支持旧版 v1，见 README.md。'
 }
 check_passwords() {
     local key value
