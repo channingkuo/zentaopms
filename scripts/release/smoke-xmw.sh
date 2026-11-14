@@ -6,6 +6,9 @@ ARCHIVE=$(realpath "$1")
 WORK=$(mktemp -d "$(dirname "$ARCHIVE")/.smoke.XXXXXX")
 PROJECT="xmw-smoke-$$"
 PACKAGE="$WORK/zentao-deploy"
+DATA_PATH="$WORK/zentao-data"
+LOG_PATH="$WORK/zentao-logs"
+BACKUP_PATH="$WORK/zentao-backups"
 cleanup() {
   local result=$?
   trap - EXIT
@@ -14,7 +17,7 @@ cleanup() {
   fi
   if [[ -n ${DB_IMAGE:-} ]]; then
     docker run --rm --network none --entrypoint /bin/bash -v "$WORK:/cleanup:z" "$DB_IMAGE" -ec \
-      'rm -rf /cleanup/zentao-deploy/data /cleanup/zentao-deploy/logs /cleanup/zentao-deploy/backups /cleanup/zentao-deploy/old-data /cleanup/zentao-deploy/old-logs' || true
+      'rm -rf /cleanup/zentao-data /cleanup/zentao-logs /cleanup/zentao-backups /cleanup/old-data /cleanup/old-logs' || true
   fi
   rm -rf "$WORK" || true
   exit "$result"
@@ -56,13 +59,13 @@ check_data
 ./deploy.sh backup
 ./deploy.sh down
 # Restore the physical backup into empty directories, using original UID/GID.
-backup=$(find backups -maxdepth 1 -name '*.tar.gz' -printf '%f\n')
+backup=$(find "$BACKUP_PATH" -maxdepth 1 -name '*.tar.gz' -printf '%f\n')
 [[ -n "$backup" && "$backup" != *$'\n'* ]]
-mv data old-data
-mv logs old-logs
-mkdir data logs
+mv "$DATA_PATH" "$WORK/old-data"
+mv "$LOG_PATH" "$WORK/old-logs"
+mkdir "$DATA_PATH" "$LOG_PATH"
 docker run --rm --network none --entrypoint /bin/bash \
-  -v "$PACKAGE/backups:/backup:ro,z" -v "$PACKAGE/data:/restore/data:z" -v "$PACKAGE/logs:/restore/logs:z" \
+  -v "$BACKUP_PATH:/backup:ro,z" -v "$DATA_PATH:/restore/data:z" -v "$LOG_PATH:/restore/logs:z" \
   "$DB_IMAGE" -ec 'cd /backup; sha256sum -c "$1.sha256"; tar -xzpf "$1" -C /restore data logs' -- "$backup"
 ./deploy.sh up
 check_data

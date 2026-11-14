@@ -13,7 +13,25 @@ sudo ./deploy.sh up
 
 访问 `http://服务器IP:8080/`，完成官方安装向导并设置管理员。数据库主机 `db`、端口 `3306`，账号和密码见 `.env`。不会预置业务管理员或测试数据。
 
-所有参数在 `.env` 中，脚本读取而不执行该文件。首次启动自动生成独立随机数据库密码；再次启动保留密码。不要丢失已有数据库对应的 `.env`。文件仅支持 `.env.example` 列出的参数，不支持插值、转义或行尾注释。路径相对部署目录解析。
+所有参数在 `.env` 中，脚本读取而不执行该文件。首次启动自动生成独立随机数据库密码；再次启动保留密码。不要丢失已有数据库对应的 `.env`。文件仅支持 `.env.example` 列出的参数，不支持插值、转义或行尾注释。路径相对部署目录解析，默认放在部署包的同级目录：
+
+```dotenv
+DATA_DIR=../zentao-data
+LOG_DIR=../zentao-logs
+BACKUP_DIR=../zentao-backups
+```
+
+例如在 `/data-8t/zentao/zentao-deploy` 下部署，三个目录分别为 `/data-8t/zentao/zentao-data`、`/data-8t/zentao/zentao-logs`、`/data-8t/zentao/zentao-backups`。已有 `.env` 不会被覆盖，已有数据不会自动迁移。
+
+如果出现 `unknown flag: --short` 或提示缺少 Compose，请先运行 `docker compose version` 检查插件。此包需要 Compose >= 2.24，不能使用旧版 `docker-compose` v1。Ubuntu/Debian 在配置了 Docker 官方软件源后可以安装：
+
+```bash
+sudo apt-get update
+sudo apt-get install docker-compose-plugin
+docker compose version
+```
+
+其他发行版或尚未配置 Docker 软件源时，按 https://docs.docker.com/compose/install/linux/ 安装插件。Docker Engine 本身可用不代表已安装 Compose 插件。
 
 - `DATA_DIR`：MariaDB 数据在 `mysql/`；禅道配置、附件和 session 在 `zentao/`。
 - `LOG_DIR`：Apache、PHP、禅道、数据库及启动控制台日志分别映射。
