@@ -1,0 +1,72 @@
+name: Build and release XMW offline deployment
+
+on:
+  push:
+    tags: ['[0-9]*']
+  workflow_dispatch:
+
+concurrency:
+  group: xmw-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Check tag and source version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]
+          test "$(cat VERSION)" = "$TAG"
+      - name: Build offline bundle
+        run: bash scripts/release/build-xmw.sh
+      - name: Test actual exported images and persistence
+        run: bash scripts/release/smoke-xmw.sh dist/zentao-*-linux-amd64-offline.tar.gz
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: xmw-offline
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093a # v4.3.0
+        with:
+          name: xmw-offline
+          path: dist
+      - name: Replace same-version Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum --check ./*.tar.gz.sha256
+          # Read failures must abort; do not mistake authorization/network errors for absence.
+          releases=$(gh api --paginate "repos/$GH_REPO/releases" --jq '.[].tag_name')
+          if grep -Fxq -- "$TAG" <<< "$releases"; then
+            gh release delete "$TAG" --yes
+          fi
+          # Keep the source tag. Build/test failures never reach this job.
+          gh release create "$TAG" --verify-tag --draft --title "$TAG-XMW" \
+            --notes "禅道 $TAG Linux amd64 离线一键部署包。包含官方禅道和 MariaDB 镜像、统一 .env、持久化数据/日志、备份脚本及 SHA-256 校验。下载后解压，运行 sudo ./deploy.sh up。首次访问完成官方安装向导。"
+          gh release upload "$TAG" ./*.tar.gz ./*.tar.gz.sha256
+          gh release edit "$TAG" --draft=false --latest

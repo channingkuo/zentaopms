@@ -1,0 +1,117 @@
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "${DOCKER_LOG_MAX_SIZE}"
+    max-file: "${DOCKER_LOG_MAX_FILE}"
+
+services:
+  db:
+    image: "${DB_IMAGE}"
+    platform: "${PLATFORM}"
+    pull_policy: never
+    restart: "${RESTART_POLICY}"
+    stop_grace_period: "${STOP_TIMEOUT}s"
+    entrypoint: ["/bin/bash", "/deploy/mysql-entrypoint.sh"]
+    command:
+      - mariadbd
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --innodb-buffer-pool-size=${DB_INNODB_BUFFER_POOL_SIZE}
+      - --max-connections=${DB_MAX_CONNECTIONS}
+      - --log-error=/var/log/mysql/error.log
+      - --slow-query-log=${DB_SLOW_QUERY_LOG}
+      - --slow-query-log-file=/var/log/mysql/slow.log
+      - --long-query-time=${DB_LONG_QUERY_TIME}
+    environment:
+      TZ: "${TZ}"
+      MARIADB_ROOT_PASSWORD: "${DB_ROOT_PASSWORD:?请先执行 ./deploy.sh init}"
+      MARIADB_DATABASE: "${DB_NAME}"
+      MARIADB_USER: "${DB_USER}"
+      MARIADB_PASSWORD: "${DB_PASSWORD:?请先执行 ./deploy.sh init}"
+    volumes:
+      - "${DATA_DIR}/mysql:/var/lib/mysql:z"
+      - "${LOG_DIR}/mysql:/var/log/mysql:z"
+      - "./scripts/mysql-entrypoint.sh:/deploy/mysql-entrypoint.sh:ro,z"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    networks: [backend]
+    logging: *logging
+
+  zentao:
+    image: "${ZENTAO_IMAGE}"
+    platform: "${PLATFORM}"
+    pull_policy: never
+    restart: "${RESTART_POLICY}"
+    stop_grace_period: "${STOP_TIMEOUT}s"
+    entrypoint: ["/bin/bash", "/deploy/zentao-entrypoint.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${BIND_IP}:${HTTP_PORT}:80"
+    volumes:
+      - "${DATA_DIR}/zentao:/data:z"
+      - "${LOG_DIR}/apache:/opt/zbox/logs:z"
+      - "${LOG_DIR}/php:/data/php/log:z"
+      - "${LOG_DIR}/zentao:/data/zentao/tmp/log:z"
+      - "${LOG_DIR}/runtime:/deploy-logs:z"
+      - "./scripts/zentao-entrypoint.sh:/deploy/zentao-entrypoint.sh:ro,z"
+    environment:
+      TZ: "${TZ}"
+      MYSQL_INTERNAL: "false"
+      REDIS_INTERNAL: "false"
+      RR_INTERNAL: "${RR_INTERNAL}"
+      ZT_MYSQL_HOST: db
+      ZT_MYSQL_PORT: "3306"
+      ZT_MYSQL_DB: "${DB_NAME}"
+      ZT_MYSQL_USER: "${DB_USER}"
+      ZT_MYSQL_PASSWORD: "${DB_PASSWORD}"
+      ZT_WEB_ROOT: "${ZT_WEB_ROOT}"
+      ZT_ADMINER_ENABLE: "${ZT_ADMINER_ENABLE}"
+      ZT_CHECK_OWNER: "${ZT_CHECK_OWNER}"
+      PHP_SESSION_TYPE: files
+      PHP_SESSION_PATH: /data/php/session
+      PHP_ERROR_LOG: /data/php/log/error.log
+      PHP_MAX_EXECUTION_TIME: "${PHP_MAX_EXECUTION_TIME}"
+      PHP_MEMORY_LIMIT: "${PHP_MEMORY_LIMIT}"
+      PHP_POST_MAX_SIZE: "${PHP_POST_MAX_SIZE}"
+      PHP_UPLOAD_MAX_FILESIZE: "${PHP_UPLOAD_MAX_FILESIZE}"
+      PHP_MAX_INPUT_VARS: "${PHP_MAX_INPUT_VARS}"
+      SMTP_ENABLED: "${SMTP_ENABLED}"
+      SMTP_FROMNAME: "${SMTP_FROMNAME}"
+      SMTP_HOST: "${SMTP_HOST}"
+      SMTP_PORT: "${SMTP_PORT}"
+      SMTP_USER: "${SMTP_USER}"
+      SMTP_PASS: "${SMTP_PASS}"
+      LDAP_ENABLED: "${LDAP_ENABLED}"
+      LDAP_HOST: "${LDAP_HOST}"
+      LDAP_PORT: "${LDAP_PORT}"
+      LDAP_BASEDN: "${LDAP_BASEDN}"
+      LDAP_ADMINUSER: "${LDAP_ADMINUSER}"
+      LDAP_BINDPASSWORD: "${LDAP_BINDPASSWORD}"
+      LDAP_USERKEY: "${LDAP_USERKEY}"
+      LDAP_EMAILKEY: "${LDAP_EMAILKEY}"
+      LDAP_GROUP: "${LDAP_GROUP}"
+      LDAP_REALNAME: "${LDAP_REALNAME}"
+      LDAP_REPEATPOLICY: "${LDAP_REPEATPOLICY}"
+      LDAP_AUTOCREATE: "${LDAP_AUTOCREATE}"
+    healthcheck:
+      test:
+        - CMD
+        - /opt/zbox/bin/php
+        - -r
+        - "$$s=@fsockopen('127.0.0.1',80,$$e,$$m,3); if(!$$s)exit(1); fwrite($$s, \"GET / HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n\"); $$h=fgets($$s); exit(preg_match('/^HTTP\\/[0-9.]+ [23][0-9]{2}/', $$h ?: '')?0:1);"
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    networks: [backend]
+    logging: *logging
+
+networks:
+  backend:
+    driver: bridge
