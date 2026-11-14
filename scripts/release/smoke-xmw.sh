@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 [[ $# == 1 && -f "$1" ]] || { echo 'Usage: smoke-xmw.sh bundle.tar.gz' >&2; exit 1; }
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 ARCHIVE=$(realpath "$1")
 (cd "$(dirname "$ARCHIVE")" && sha256sum -c "$(basename "$ARCHIVE").sha256")
 WORK=$(mktemp -d "$(dirname "$ARCHIVE")/.smoke.XXXXXX")
@@ -44,6 +45,7 @@ compose() { docker compose --project-directory "$PACKAGE" --env-file "$PACKAGE/.
 check_http() {
   curl --fail --silent --show-error --location --max-time 30 "http://127.0.0.1:$PORT/" -o "$WORK/page.html"
   grep -Eq '22\.7|ZenTao|禅道' "$WORK/page.html"
+  python3 "$ROOT/scripts/release/check-web-assets.py" "http://127.0.0.1:$PORT/"
 }
 check_http
 compose exec -T db bash -ec 'MYSQL_PWD="$MARIADB_PASSWORD" mariadb --user="$MARIADB_USER" "$MARIADB_DATABASE" -e "CREATE TABLE xmw_deploy_probe (id INT PRIMARY KEY); INSERT INTO xmw_deploy_probe VALUES (227);"'

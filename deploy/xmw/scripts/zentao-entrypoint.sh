@@ -3,11 +3,11 @@ set -Eeuo pipefail
 mkdir -p /deploy-logs /opt/zbox/logs /data/php/log /data/zentao/tmp/log
 chown nobody:nogroup /opt/zbox/logs /data/php/log /data/zentao/tmp/log
 exec > >(tee -a /deploy-logs/container.log) 2>&1
-# 官方模板的 Alias 在根路径下需要目标尾斜杠。
+# 官方 getWebRoot() 会把非空的 / 拼成 //，使 CSS/JS 成为跨主机地址。
+# 用空环境变量表示根路径，Apache 的 DocumentRoot 已指向 www。
 if [[ "${ZT_WEB_ROOT:-/}" == / ]]; then
-    for template in /opt/zbox/etc/apache/httpd.conf*.tpl; do
-        sed -i 's|Alias {{ZT_WEB_ROOT}} "/apps/zentao/www"|Alias / "/apps/zentao/www/"|' "$template"
-    done
+    export ZT_WEB_ROOT=''
+    export APP_WEB_ROOT=''
 fi
 for template in /opt/zbox/etc/apache/httpd.conf*.tpl; do
     sed -i 's|"/dev/stderr"|"/opt/zbox/logs/apache_error.log"|g; s|"/dev/stdout"|"/opt/zbox/logs/apache_access.log"|g' "$template"
