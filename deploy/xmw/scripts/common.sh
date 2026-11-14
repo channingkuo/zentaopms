@@ -95,19 +95,31 @@ init_env() {
 prepare_dirs() {
     mkdir -p -- "$DATA_DIR/mysql" "$DATA_DIR/zentao" "$LOG_DIR/mysql" "$LOG_DIR/apache" "$LOG_DIR/php" "$LOG_DIR/zentao" "$LOG_DIR/runtime" "$BACKUP_DIR"
 }
+image_identity_matches() {
+    local ref=$1 expected=$2 actual=$3 identity_ref identity_config identity_manifest
+    [[ "$expected" =~ ^sha256:[0-9a-f]{64}$ && "$actual" =~ ^sha256:[0-9a-f]{64}$ ]] || return 1
+    [[ "$actual" == "$expected" ]] && return 0
+    [[ -f "$DEPLOY_ROOT/images/identities.lock" ]] || return 1
+    while IFS='|' read -r identity_ref identity_config identity_manifest; do
+        if [[ "$identity_ref" == "$ref" && "$identity_config" == "$expected" && "$identity_manifest" == "$actual" ]]; then
+            return 0
+        fi
+    done < "$DEPLOY_ROOT/images/identities.lock"
+    return 1
+}
 load_images() {
     local ref file expected actual
     while IFS='|' read -r ref file expected; do
         # 用户改用其他版本镜像时，不覆盖用户指定的镜像。
         [[ "$ref" == "$ZENTAO_IMAGE" || "$ref" == "$DB_IMAGE" ]] || continue
         actual=$(docker image inspect "$ref" --format '{{.Id}}' 2>/dev/null || true)
-        if [[ "$actual" != "$expected" ]]; then
+        if ! image_identity_matches "$ref" "$expected" "$actual"; then
             [[ -f "$DEPLOY_ROOT/images/$file" ]] || fail "缺少离线镜像：images/$file"
             printf '校验并导入离线镜像：%s\n' "$ref"
             (cd "$DEPLOY_ROOT/images" && sha256sum --check --status "$file.sha256") || fail "离线镜像校验失败：$file"
             docker load --input "$DEPLOY_ROOT/images/$file"
             actual=$(docker image inspect "$ref" --format '{{.Id}}')
-            [[ "$actual" == "$expected" ]] || fail "导入镜像 ID 不匹配：$ref"
+            image_identity_matches "$ref" "$expected" "$actual" || fail "导入镜像身份不匹配：$ref（配置摘要=$expected，Docker 返回=$actual）。请更新匹配此部署包的 scripts/common.sh 和 images/identities.lock。"
         fi
     done < "$DEPLOY_ROOT/images/images.lock"
     for ref in "$ZENTAO_IMAGE" "$DB_IMAGE"; do

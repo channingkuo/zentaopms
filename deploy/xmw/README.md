@@ -51,7 +51,7 @@ docker compose version
 
 ## 构建与验证
 
-`images/images.lock` 记录实际拉取的官方镜像 ID，导入前验证归档 SHA-256，导入后核对 ID。`docs/images.jsonl` 保存镜像摘要与元数据，`docs/BUILD.txt` 记录源码提交。官方镜像保留原始层和许可，不包含仓库二次开发代码。
+`images/images.lock` 记录实际拉取的官方镜像 ID，导入前验证归档 SHA-256，导入后核对镜像身份。`images/identities.lock` 将配置摘要绑定到归档中实际存在且通过 SHA-256 验证的 OCI manifest/index 摘要，以兼容 classic 与 containerd 两种镜像存储；不会跳过身份或归档校验。`docs/images.jsonl` 保存镜像摘要与元数据，`docs/BUILD.txt` 记录源码提交。官方镜像保留原始层和许可，不包含仓库二次开发代码。
 
 CI 使用完整交付归档执行 `docker load`、安装页面访问、日志落盘、容器重建持久化、停机备份和空目录恢复测试，通过后才发布。未覆盖管理员创建后的完整业务流程、SMTP/LDAP 或各发行版 SELinux 策略。
 

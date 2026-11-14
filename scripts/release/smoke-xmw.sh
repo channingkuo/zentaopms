@@ -26,10 +26,11 @@ trap cleanup EXIT
 tar -xzf "$ARCHIVE" -C "$WORK"
 cd "$PACKAGE"
 sha256sum --check --status MANIFEST.sha256
+source "$PACKAGE/scripts/common.sh"
 while IFS='|' read -r ref file id; do
   (cd images && sha256sum --check "$file.sha256")
   docker load --input "images/$file"
-  test "$(docker image inspect "$ref" --format '{{.Id}}')" = "$id"
+  image_identity_matches "$ref" "$id" "$(docker image inspect "$ref" --format '{{.Id}}')"
 done < images/images.lock
 DB_IMAGE=$(sed -n 's/^DB_IMAGE=//p' .env.example)
 PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')

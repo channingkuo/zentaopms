@@ -19,13 +19,14 @@ sed -i "s|^ZENTAO_IMAGE=.*|ZENTAO_IMAGE=$ZENTAO_IMAGE|" "$PACKAGE/.env.example"
 cp "$PACKAGE/.env.example" "$PACKAGE/.env"
 chmod 600 "$PACKAGE/.env"
 : > "$PACKAGE/images/images.lock"
+: > "$PACKAGE/images/identities.lock"
 : > "$PACKAGE/docs/images.jsonl"
 for ref in "$ZENTAO_IMAGE" "$DB_IMAGE"; do
   docker pull --platform linux/amd64 "$ref"
   test "$(docker image inspect "$ref" --format '{{.Os}}/{{.Architecture}}')" = linux/amd64
-  id=$(docker image inspect "$ref" --format '{{.Id}}')
   filename="$(basename "$ref" | tr ':' '-')-linux-amd64.tar.gz"
   docker save "$ref" | gzip -1 > "$PACKAGE/images/$filename"
+  id=$(python3 scripts/release/archive-identity.py "$PACKAGE/images/$filename" "$ref" "$PACKAGE/images/identities.lock")
   (cd "$PACKAGE/images" && sha256sum "$filename" > "$filename.sha256")
   printf '%s|%s|%s\n' "$ref" "$filename" "$id" >> "$PACKAGE/images/images.lock"
   docker image inspect "$ref" --format '{{json .}}' >> "$PACKAGE/docs/images.jsonl"
