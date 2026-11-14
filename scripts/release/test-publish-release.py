@@ -32,7 +32,7 @@ if args[:2] == ['release', 'upload']:
 
 
 class PublicationTests(unittest.TestCase):
-    def invoke(self, *, overrides=None, corrupt=False):
+    def invoke(self, *, overrides=None, corrupt=False, plugin=True, corrupt_plugin=False):
         with tempfile.TemporaryDirectory(prefix='xmw-release-test-') as folder:
             root = Path(folder)
             (root / 'dist').mkdir()
@@ -40,6 +40,11 @@ class PublicationTests(unittest.TestCase):
             archive.write_bytes(b'tested-package')
             digest = '0' * 64 if corrupt else hashlib.sha256(archive.read_bytes()).hexdigest()
             archive.with_suffix('.gz.sha256').write_text(f'{digest}  {archive.name}\n')
+            if plugin:
+                package = root / 'dist/xmwprogramgantt-1.0.2.zip'
+                package.write_bytes(b'tested-plugin')
+                digest = '0' * 64 if corrupt_plugin else hashlib.sha256(package.read_bytes()).hexdigest()
+                package.with_suffix('.zip.sha256').write_text(f'{digest}  {package.name}\n')
             (root / 'gh').write_text(MOCK)
             (root / 'gh').chmod(0o700)
             log = root / 'calls.jsonl'
@@ -62,6 +67,10 @@ class PublicationTests(unittest.TestCase):
         create = next(call for call in calls if call[:2] == ['release', 'create'])
         self.assertIn('--verify-tag', create)
         self.assertIn('--draft', create)
+        upload = next(call for call in calls if call[:2] == ['release', 'upload'])
+        self.assertEqual(set(upload[3:]), {'zentao-22.7-linux-amd64-offline.tar.gz',
+                                         'zentao-22.7-linux-amd64-offline.tar.gz.sha256',
+                                         'xmwprogramgantt-1.0.2.zip', 'xmwprogramgantt-1.0.2.zip.sha256'})
 
     def test_rerun_replaces_only_its_own_release(self):
         result, calls = self.invoke(overrides={'MOCK_TAG_SHA': SHA, 'MOCK_RELEASES': '22.7\n' + TAG})
@@ -92,6 +101,13 @@ class PublicationTests(unittest.TestCase):
         result, calls = self.invoke(overrides={'MOCK_UPLOAD_FAILURE': '1'})
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(any(call[:2] == ['release', 'edit'] for call in calls))
+
+    def test_missing_or_corrupt_plugin_never_touches_github(self):
+        for options in ({'plugin': False}, {'corrupt_plugin': True}):
+            with self.subTest(options=options):
+                result, calls = self.invoke(**options)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(calls, [])
 
 
 if __name__ == '__main__':

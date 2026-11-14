@@ -6,6 +6,7 @@
 #programGantt .form-control {height: 30px; padding: 3px 6px; width: auto; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; color: #253858;}
 #programGantt input[type=search] {width: 165px;}
 #programGantt .pg-check {display: inline-flex; align-items: center; gap: 5px; cursor: pointer; font-size: 12px; margin: 0 4px 0 0;}
+#programGantt .pg-capabilities {display: inline-flex; align-items: center; gap: 8px;}
 #programGantt input[type=checkbox] {appearance: auto; width: 14px; height: 14px;}
 #programGantt .pg-notice {font-size: 12px; line-height: 1.6; min-height: 20px; color: #63758c; margin: 4px 0 10px;}
 #programGantt .pg-error {color: #bd2525;}
