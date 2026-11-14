@@ -1,18 +1,22 @@
 # XMW 项目集甘特图
 
-基于 `release/22.7-xmw` / 禅道开源版 22.7 的独立扩展，版本 1.0.2。独立实现项目集甘特图的核心使用场景，没有依赖官方收费插件；未声称与官方 2.2 的全部功能逐项一致。
+基于 `release/22.7-xmw` / 禅道开源版 22.7 的独立扩展，版本 1.0.3。独立实现项目集甘特图的核心使用场景，没有依赖官方收费插件；未声称与官方 2.2 的全部功能逐项一致。
 
 ## 安装及权限
 
 本分支已包含全部扩展源码，部署此分支到实际运行目录后即可使用。已有 `extension/custom/program/ext/control/gantt.php` 等同名扩展时，先评估文件冲突。
 
-可直接在 GitHub Release 页面的 Assets 下载 `xmwprogramgantt-1.0.2.zip` 及其 SHA-256 校验文件，也可以生成后台本地安装包：
+可直接在 GitHub Release 页面的 Assets 下载 `xmwprogramgantt-1.0.3.zip` 及其 SHA-256 校验文件，也可以生成后台本地安装包：
 
 ```bash
 python3 scripts/program-gantt/package.py
 ```
 
-输出 `dist/xmwprogramgantt-1.0.2.zip` 和 SHA-256 文件。版本由本目录 `VERSION` 文件统一声明。备份代码和数据库后，以超级管理员在「后台 → 插件 → 本地安装」上传 ZIP；已有旧版时走后台插件升级。插件不需要 ionCube、额外 PHP 扩展、外部导出服务或数据库结构变更。安装包只包含本插件的明确文件清单，不会带入本地配置或其他定制。
+输出 `dist/xmwprogramgantt-1.0.3.zip` 和 SHA-256 文件。版本由本目录 `VERSION` 文件统一声明。备份代码和数据库后，以超级管理员在「后台 → 插件 → 本地安装」上传 ZIP；已有旧版时走后台插件升级。插件不需要 ionCube、额外 PHP 扩展、外部导出服务或数据库结构变更。安装包只包含本插件的明确文件清单，不会带入本地配置或其他定制。
+
+1.0.3 修复关闭项目集功能或使用轻量模式时，权限语言扩展给已移除的项目集资源赋值、导致登录和项目页面 Fatal error 的问题。该情况下跳过插件菜单与权限注册，直接访问甘特图时返回启用功能提示，不重新创建被核心隐藏的权限。若权限语言缺少分类名称容器，则仅初始化该名称容器。覆盖五种插件语言、正常/轻量/关闭项目集配置，以及实际已登录用户页面启动和重新启用功能的回归。
+
+若旧版导致后台也无法进入，可在容器内暂时将报错的 `extension/custom/group/ext/lang/zh-cn/programgantt.php` 改名为 `programgantt.php.disabled`，恢复页面后上传 1.0.3 升级。升级会写入正确的 `.php` 文件，临时 `.disabled` 文件不会参与加载。使用甘特图前需在后台启用项目集，并选择支持项目集的管理模式。
 
 1.0.2 修复通过禅道导航首次进入甘特图为空白的问题：等待页面内容替换完成再初始化，离开页面时清理渲染器。内置「刷新」通过原有查看权限接口局部重新读取数据，不重新加载浏览器或应用框架；等待时保留图表，成功后保留筛选、字段、时间刻度、日期范围、折叠和滚动状态，失败时保留内容并提示。管理员和项目负责人均按同一页面生命周期处理。
 
@@ -58,6 +62,7 @@ node tests/program-gantt/frontend.test.cjs
 
 # 使用 test/config/my.php 的测试数据库；请先初始化 db/zentao.sql
 php tests/program-gantt/backend.php
+php tests/program-gantt/features.php
 
 # 构建后使用禅道本身的安装包解析器校验元数据和文件清单
 python3 scripts/program-gantt/package.py
@@ -67,6 +72,7 @@ php tests/program-gantt/package.php
 GANTT_BROWSER_FIXTURE=1 php tests/program-gantt/browser-fixture.php create
 node tests/program-gantt/lifecycle.test.cjs
 node tests/program-gantt/browser.test.cjs
+node tests/program-gantt/feature-login.test.cjs
 GANTT_BROWSER_FIXTURE=1 php tests/program-gantt/browser-fixture.php cleanup
 ```
 

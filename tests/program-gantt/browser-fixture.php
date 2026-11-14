@@ -12,6 +12,17 @@ $app = router::createApp('pms', $root, 'router');
 $tester = $app->loadCommon();
 $stateFile = $argv[2] ?? sys_get_temp_dir() . '/program-gantt-fixture.json';
 $dao = $tester->dao;
+if(($argv[1] ?? '') === 'mode')
+{
+    if(!is_file($stateFile)) throw new RuntimeException('Create disposable browser fixtures first.');
+    $mode=$argv[3] ?? '';
+    if(!in_array($mode,array('enabled','light','disabled'),true)) throw new RuntimeException('Unknown test mode.');
+    $setting=$tester->loadModel('setting');
+    $setting->setItem('system.common.global.mode', $mode==='light' ? 'light' : 'ALM');
+    $setting->setItem('system.common.disabledFeatures', $mode==='disabled' ? 'program' : '');
+    echo "Browser test mode: $mode\n";
+    exit;
+}
 if(($argv[1] ?? '') === 'cleanup')
 {
     if(!is_file($stateFile)) exit;
