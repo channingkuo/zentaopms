@@ -35,6 +35,11 @@ with tarfile.open(archive_path, 'r:gz') as archive:
         matched = set()
         if 'manifests' in manifest:
             for child in manifest['manifests']:
+                # A platform-specific pull/export can retain descriptors for
+                # other platforms whose blobs were never downloaded.
+                platform = child.get('platform')
+                if platform and (platform.get('os'), platform.get('architecture')) != ('linux', 'amd64'):
+                    continue
                 matched.update(visit(child))
         else:
             cfg_id = manifest['config']['digest']

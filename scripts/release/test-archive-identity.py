@@ -24,11 +24,19 @@ with tempfile.TemporaryDirectory() as tmp:
     manifest = encoded({'schemaVersion': 2, 'config': {'digest': config_id}, 'layers': []})
     manifest_id = digest(manifest)
     manifest_path = 'blobs/' + manifest_id.replace(':', '/')
-    for mode in ['classic', 'oci', 'corrupt']:
+    for mode in ['classic', 'oci', 'partial-index', 'missing-amd64', 'corrupt']:
         files = {config_path: config, manifest_path: manifest,
                  'index.json': encoded({'schemaVersion': 2, 'manifests': [{'digest': manifest_id}]})}
         if mode == 'classic':
             files['manifest.json'] = encoded([{'Config': config_path, 'RepoTags': [ref], 'Layers': []}])
+        if mode in ['partial-index', 'missing-amd64']:
+            missing_id = 'sha256:' + '0' * 64
+            selected = {'digest': manifest_id, 'platform': {'os': 'linux', 'architecture': 'amd64'}}
+            missing = {'digest': missing_id, 'platform': {'os': 'linux', 'architecture': 'arm64' if mode == 'partial-index' else 'amd64'}}
+            multi = encoded({'schemaVersion': 2, 'manifests': [selected, missing]})
+            multi_id = digest(multi)
+            files['blobs/' + multi_id.replace(':', '/')] = multi
+            files['index.json'] = encoded({'schemaVersion': 2, 'manifests': [{'digest': multi_id}]})
         if mode == 'corrupt':
             files[manifest_path] = b'{}'
         path = root / (mode + '.tar.gz')
@@ -39,10 +47,13 @@ with tempfile.TemporaryDirectory() as tmp:
                 archive.addfile(info, io.BytesIO(data))
         lock = root / (mode + '.lock')
         result = subprocess.run(['python3', str(helper), str(path), ref, str(lock)], capture_output=True, text=True)
-        if mode == 'corrupt':
+        if mode in ['corrupt', 'missing-amd64']:
             assert result.returncode != 0 and not lock.exists()
         else:
             assert result.returncode == 0, result.stderr
             assert result.stdout.strip() == config_id
-            assert lock.read_text().strip() == '|'.join([ref, config_id, manifest_id])
-print('PASS: classic and OCI-only exports bind manifest to config; corrupt descriptors rejected')
+            expected = {'|'.join([ref, config_id, manifest_id])}
+            if mode == 'partial-index':
+                expected.add('|'.join([ref, config_id, multi_id]))
+            assert set(lock.read_text().splitlines()) == expected
+print('PASS: classic/OCI/partial multiarch index; corrupt or missing amd64 blobs rejected')
