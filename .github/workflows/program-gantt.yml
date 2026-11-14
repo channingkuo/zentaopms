@@ -75,6 +75,6 @@ jobs:
         with:
           name: xmw-program-gantt
           path: |
-            dist/xmwprogramgantt-1.0.0.zip
-            dist/xmwprogramgantt-1.0.0.zip.sha256
+            dist/xmwprogramgantt-1.0.1.zip
+            dist/xmwprogramgantt-1.0.1.zip.sha256
           if-no-files-found: error
