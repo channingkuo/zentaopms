@@ -3,6 +3,7 @@ $lang->program->gantt = "Program Gantt";
 $lang->program->ganttEdit = "Edit Gantt dates";
 $lang->program->ganttExport = "Export Gantt";
 $lang->program->ganttLang = array(
+    "featureDisabled" => "Enable Programs in administration and use a management mode that supports Programs.",
     "loading" => "Loading Gantt chart…",
     "refreshing" => "Refreshing; keeping the current chart visible…",
     "refreshFailed" => "Refresh failed. The current chart is unchanged; please try again.",

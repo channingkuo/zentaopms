@@ -1,4 +1,6 @@
 <?php
+if(($config->systemMode ?? '') === 'light' || !helper::hasFeature('program')) return;
+
 $config->group->package->programGantt = new stdclass();
 $config->group->package->programGantt->order = 12;
 $config->group->package->programGantt->subset = 'program';

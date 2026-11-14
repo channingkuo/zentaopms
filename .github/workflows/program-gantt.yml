@@ -74,6 +74,7 @@ jobs:
           find extension/custom/program extension/custom/common extension/custom/group -name '*.php' -exec php -l '{}' +
           node --check extension/custom/program/ext/js/gantt/programgantt.ui.js
           node tests/program-gantt/frontend.test.cjs
+          php tests/program-gantt/features.php
           php tests/program-gantt/backend.php
           python3 scripts/program-gantt/package.py
           php tests/program-gantt/package.php
@@ -104,6 +105,7 @@ jobs:
           curl --fail --silent 'http://127.0.0.1:8080/index.php?m=api&f=getSessionID&t=json' > /dev/null
           node tests/program-gantt/lifecycle.test.cjs
           node tests/program-gantt/browser.test.cjs
+          node tests/program-gantt/feature-login.test.cjs
       - if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

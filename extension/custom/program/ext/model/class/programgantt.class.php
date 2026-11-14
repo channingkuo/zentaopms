@@ -8,6 +8,7 @@ class programganttProgram extends programModel
     /** Return only fields needed by the chart, after applying each object's ACL. */
     public function getData(int $programID = 0): array
     {
+        $this->requireProgramFeature();
         if(!common::hasPriv('program', 'gantt')) throw new DomainException($this->lang->program->ganttLang['denied']);
         $objects = $this->dao->select('id,parent,project,path,type,name,status,begin,end,PM,progress,multiple,frozen,vision,isTpl,openedBy,lastEditedBy,closedBy,canceledBy')
             ->from(TABLE_PROJECT)->where('deleted')->eq(0)->andWhere('vision')->eq($this->config->vision)
@@ -67,6 +68,12 @@ class programganttProgram extends programModel
         foreach($nodes as &$node) $node['owner'] = $users[$node['owner']] ?? $node['owner'];
         unset($node);
         return array_values($nodes);
+    }
+
+    private function requireProgramFeature(): void
+    {
+        if(($this->config->systemMode ?? '') === 'light' || !helper::hasFeature('program'))
+            throw new DomainException($this->lang->program->ganttLang['featureDisabled']);
     }
 
     private function canView(object $object): bool
@@ -133,6 +140,7 @@ class programganttProgram extends programModel
     /** Update one object's dates only. Parents and children are never moved implicitly. */
     public function saveDates(string $type, int $id, string $begin, string $end, string $oldBegin, string $oldEnd): bool
     {
+        $this->requireProgramFeature();
         $messages = $this->lang->program->ganttLang;
         if(!common::hasPriv('program', 'gantt') || !common::hasPriv('program', 'ganttEdit')) throw new DomainException($messages['denied']);
         if(!in_array($type, array('program', 'project', 'execution', 'task')) || $id <= 0) throw new DomainException($messages['denied']);

@@ -3,6 +3,7 @@ $lang->program->gantt = "项目集甘特图";
 $lang->program->ganttEdit = "编辑甘特图排期";
 $lang->program->ganttExport = "导出甘特图";
 $lang->program->ganttLang = array(
+    "featureDisabled" => "请先在后台启用项目集功能，并使用支持项目集的管理模式。",
     "loading" => "正在加载甘特图…",
     "refreshing" => "正在刷新，当前图表将保留显示…",
     "refreshFailed" => "刷新失败，已保留当前图表，请重试。",
