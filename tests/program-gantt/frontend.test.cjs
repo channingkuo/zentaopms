@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const {date, iso, validRange, visibleRows, ticks, makePDF} = require('../../extension/custom/program/ext/js/gantt/programgantt.ui.js');
+const {date, iso, validRange, visibleRows, ticks, calendarBands, makePDF} = require('../../extension/custom/program/ext/js/gantt/programgantt.ui.js');
 const state = {scope:'',status:'all',search:'',executions:true,tasks:true,collapsed:new Set()};
 const nodes = [
  {id:'p1',parent:'',type:'program',name:'Visible program',status:'doing'},
@@ -38,3 +38,22 @@ assert.equal(ticks(date('2026-01-01'),date('2026-12-31'),'quarter').length,4);
  offsets.forEach((offset,i)=>assert.ok(text.slice(offset).startsWith(`${i+1} 0 obj`)));
  console.log('Frontend regression checks passed (dates, hierarchy, filters, calendar ticks, PDF byte offsets).');
 })().catch(error=>{console.error(error);process.exitCode=1;});
+
+const calendar = calendarBands(date('2026-11-28'), date('2026-12-02'), 'day', 'zh-CN');
+assert.equal(calendar.major.length, 2, 'split calendar headers at month boundaries');
+assert.equal(calendar.minor.length, 5, 'daily view shows individual dates');
+assert.deepEqual(calendar.minor.map(tick => tick.label), ['28', '29', '30', '1', '2']);
+assert.deepEqual(calendar.minor.map(tick => tick.weekend), [true, true, false, false, false]);
+assert.equal(calendar.minor[0].weekday, '周六');
+const yearly = calendarBands(date('2026-12-15'), date('2027-02-01'), 'month', 'en');
+assert.deepEqual(yearly.major.map(tick => tick.label), ['2026', '2027']);
+assert.deepEqual(yearly.minor.map(tick => tick.label), ['Dec', 'Jan', 'Feb']);
+assert.equal(calendarBands(date('2024-02-28'), date('2024-03-01'), 'day').minor.length, 3);
+
+const weekly = calendarBands(date('2026-11-28'), date('2026-12-13'), 'week', 'en');
+assert.deepEqual(weekly.minor.map(tick => tick.label), ['11/28–11/29', '11/30–12/6', '12/7–12/13']);
+assert.equal(weekly.minor[1].end - weekly.minor[1].start, 7 * 86400000);
+assert.ok(weekly.minor.every(tick => tick.weekday === '' && !tick.weekend));
+const newYear = calendarBands(date('2026-12-28'), date('2027-01-03'), 'week', 'en');
+assert.equal(newYear.minor.length, 1, 'a Monday to Sunday week stays together across years');
+assert.equal(newYear.major.length, 2, 'month headings still split at the year boundary');

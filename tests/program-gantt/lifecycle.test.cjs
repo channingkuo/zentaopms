@@ -33,7 +33,7 @@ fs.mkdirSync(artifacts,{recursive:true});
    assert.equal(await app.locator('.pg-toolbar').count(),2);
   }
   await app.locator('select').nth(0).selectOption('p'+fixture.program);
-  await app.locator('select').nth(2).selectOption('quarter');
+  await app.locator('[data-scale=quarter]').click();
   await app.getByRole('searchbox').fill('任务');await page.waitForTimeout(200);
   await app.getByRole('checkbox',{name:'执行',exact:true}).uncheck();
   await app.getByText('显示字段',{exact:true}).click();
@@ -66,7 +66,7 @@ fs.mkdirSync(artifacts,{recursive:true});
   assert.equal(navigations,before,'refresh must not navigate the browser or iframe');
   assert.equal(await app.getByRole('searchbox').inputValue(),'任务');
   assert.equal(await app.locator('select').nth(0).inputValue(),'p'+fixture.program);
-  assert.equal(await app.locator('select').nth(2).inputValue(),'quarter');
+  assert.equal(await app.locator('[data-scale=quarter]').getAttribute('aria-pressed'),'true');
   assert.equal(await app.getByRole('checkbox',{name:'执行',exact:true}).isChecked(),false);
   assert.deepEqual(await viewport.evaluate(el=>({top:el.scrollTop,left:el.scrollLeft})),snapshot);
   assert.deepEqual(await app.locator('.pg-control input[type=date]').evaluateAll(inputs=>inputs.map(input=>input.value)),range);
