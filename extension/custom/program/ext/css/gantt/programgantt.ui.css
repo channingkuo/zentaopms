@@ -1,5 +1,5 @@
-#programGantt {background: var(--color-canvas, #fff); padding: 14px; border: 1px solid #e0e6ed; border-radius: 6px; color: #253858;}
-#programGantt:fullscreen {overflow: auto; border: 0; border-radius: 0;}
+#programGantt {width: 100%; max-width: calc(100vw - 32px); min-width: 0; box-sizing: border-box; background: var(--color-canvas, #fff); padding: 14px; border: 1px solid #e0e6ed; border-radius: 6px; color: #253858;}
+#programGantt:fullscreen {max-width: none; width: 100vw; overflow: auto; border: 0; border-radius: 0;}
 #programGantt .pg-toolbar {display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;}
 #programGantt .pg-control {display: flex; align-items: center; gap: 6px; font-size: 12px; margin: 0;}
 #programGantt .pg-control select {max-width: 220px; min-width: 75px;}
@@ -13,31 +13,36 @@
 #programGantt .pg-fields {position: relative;}
 #programGantt .pg-fields summary {cursor: pointer;}
 #programGantt .pg-field-panel {position: absolute; top: 32px; left: 0; display: flex; flex-direction: column; gap: 10px; z-index: 8; background: #fff; border: 1px solid #cbd5e1; padding: 12px; min-width: 130px; box-shadow: 0 4px 12px #0002;}
-#programGantt .pg-viewport {height: calc(100vh - 310px); min-height: 280px; overflow: auto; position: relative; border: 1px solid #dce3ec; border-radius: 4px; background: #fff;}
+#programGantt .pg-viewport {height: calc(100vh - 360px); min-height: 280px; overflow: auto; position: relative; border: 1px solid #dce3ec; border-radius: 4px; background: #fff;}
 #programGantt:fullscreen .pg-viewport {height: calc(100vh - 180px);}
 #programGantt .pg-grid {position: relative; min-width: 100%;}
-#programGantt .pg-header {display: flex; position: sticky; top: 0; z-index: 5; height: 36px; background: #edf2f8;}
+#programGantt .pg-header {display: flex; position: sticky; top: 0; z-index: 5; height: 64px; background: #fff;}
 #programGantt .pg-fixed {display: flex; position: sticky; left: 0; flex-shrink: 0; background: #fff; z-index: 2; border-right: 2px solid #d4dce7;}
-#programGantt .pg-heading {background: #edf2f8; z-index: 6; font-weight: 600;}
-#programGantt .pg-cell {height: 36px; padding: 0 8px; border-bottom: 1px solid #e9edf3; display: flex; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; font-size: 12px; box-sizing: border-box;}
-#programGantt .pg-name {overflow: hidden; text-overflow: ellipsis;}
+#programGantt .pg-heading {background: #fff; z-index: 6; align-items: center; font-weight: 600;}
+#programGantt .pg-cell {height: 56px; padding: 0 8px; border-bottom: 1px solid #e9edf3; display: flex; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; font-size: 12px; box-sizing: border-box;}
+#programGantt .pg-name {display: block; overflow: hidden; text-overflow: ellipsis; font-size: 13px; color: #172b4d;}
 #programGantt .pg-type {font-size: 10px; flex-shrink: 0; padding: 1px 4px; border: 1px solid currentColor; border-radius: 3px; margin-right: 5px;}
 #programGantt .pg-toggle, #programGantt .pg-date-edit {border: 0; background: transparent; padding: 0 4px; cursor: pointer; flex-shrink: 0;}
 #programGantt .pg-date-edit {margin-left: auto; color: #2878c8; font-size: 17px;}
 #programGantt .pg-content {position: relative;}
-#programGantt .pg-row {position: absolute; display: flex; width: 100%; height: 36px;}
-#programGantt .pg-row:nth-child(even) .pg-fixed, #programGantt .pg-row:nth-child(even) .pg-track {background-color: #f8fafc;}
-#programGantt .pg-track {height: 36px; flex-shrink: 0; position: relative; border-bottom: 1px solid #e9edf3; overflow: hidden;}
-#programGantt .pg-scale {height: 36px; position: relative; flex-shrink: 0; overflow: hidden;}
-#programGantt .pg-tick {position: absolute; height: 36px; line-height: 36px; padding: 0 4px; border-left: 1px solid #d4dce7; overflow: hidden; white-space: nowrap; font-size: 11px;}
-#programGantt .pg-bar {position: absolute; top: 9px; height: 18px; border-radius: 3px; overflow: hidden; min-width: 3px;}
+#programGantt .pg-row {position: absolute; display: flex; width: 100%; height: 56px;}
+#programGantt .pg-row.pg-alternate .pg-fixed, #programGantt .pg-row.pg-alternate .pg-track {background-color: #f8fafc;}
+#programGantt .pg-track {height: 56px; flex-shrink: 0; position: relative; border-bottom: 1px solid #e9edf3; overflow: hidden;}
+#programGantt .pg-scale {height: 64px; position: relative; flex-shrink: 0; overflow: hidden;}
+#programGantt .pg-tick {position: absolute; height: 32px; padding: 0 8px; display: flex; align-items: center; gap: 5px; border-left: 1px solid #e5e9f0; border-bottom: 1px solid #e5e9f0; overflow: hidden; white-space: nowrap; font-size: 12px; box-sizing: border-box;}
+#programGantt .pg-major {top: 0; font-weight: 600; color: #475569;}
+#programGantt .pg-minor {top: 32px; justify-content: center; padding: 0 3px;}
+#programGantt .pg-weekday {font-size: 10px; color: #8090a5;}
+#programGantt .pg-weekend {background: #f5f7fa;}
+#programGantt .pg-current {background: #dceeff; color: #1269bc; font-weight: 700; box-shadow: inset 0 -3px #2878c8;}
+#programGantt .pg-bar {position: absolute; top: 11px; height: 34px; z-index: 1; border-radius: 3px; overflow: hidden; min-width: 3px;}
 #programGantt .pg-bar-progress {position: absolute; height: 100%; left: 0; background: #0003; pointer-events: none;}
 #programGantt .pg-draggable {cursor: grab; touch-action: none;}
 #programGantt .pg-draggable:active {cursor: grabbing;}
 #programGantt .pg-grip {position: absolute; top: 0; bottom: 0; width: 7px; background: #ffffff40; cursor: ew-resize;}
 #programGantt .pg-begin {left: 0;} #programGantt .pg-end {right: 0;}
-#programGantt .pg-today {position: absolute; width: 1px; height: 36px; background: #e64b4b; top: 0; pointer-events: none;}
-#programGantt .pg-unscheduled {line-height: 36px; padding-left: 8px; color: #94a3b8; font-size: 12px;}
+#programGantt .pg-today {position: absolute; width: 1px; height: 56px; background: #2878c812; border-left: 1px solid #2878c880; top: 0; pointer-events: none;}
+#programGantt .pg-unscheduled {line-height: 56px; padding-left: 8px; color: #94a3b8; font-size: 12px;}
 #programGantt .pg-empty {padding: 12px; color: #64748b; position: sticky; left: 0; width: fit-content;}
 #programGantt .pg-dialog {position: fixed; inset: 0; margin: auto; padding: 24px; width: 440px; max-width: 95vw; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #253858; box-shadow: 0 12px 50px #0004;}
 #programGantt .pg-dialog::backdrop {background: #17233d66;}
@@ -45,3 +50,29 @@
 #programGantt .pg-dialog p {margin: 10px 0; overflow-wrap: anywhere;}
 #programGantt .pg-dialog h3 {font-size: 18px; font-weight: 600;}
 #programGantt :focus-visible {outline: 2px solid #2878c8; outline-offset: 2px;}
+
+#programGantt .pg-viewbar {display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; padding: 10px 0; border-top: 1px solid #edf0f5;}
+#programGantt .pg-count {margin-right: auto; color: #63758c; font-size: 12px;}
+#programGantt .pg-views {display: flex; gap: 2px; padding: 3px; background: #f1f4f8; border-radius: 7px;}
+#programGantt .pg-views .btn {border: 0; background: transparent; min-width: 42px; color: #63758c;}
+#programGantt .pg-views [aria-pressed=true] {background: #fff; color: #1c6fc4; box-shadow: 0 1px 4px #172b4d26; border-radius: 5px;}
+#programGantt .pg-heading .pg-cell {height: 64px; border-bottom: 1px solid #e5e9f0; color: #63758c;}
+#programGantt .pg-task-info {min-width: 0; flex: 1; line-height: 18px;}
+#programGantt .pg-task-meta, #programGantt .pg-task-schedule {display: flex; gap: 7px; align-items: center; color: #8492a6; font-size: 10px; line-height: 15px; min-width: 0;}
+#programGantt .pg-type {border: 0; background: #f1f5f9; padding: 0 4px; line-height: 16px;}
+#programGantt .pg-row:hover .pg-fixed {background-color: #edf6ff;}
+#programGantt .pg-track {background-image: linear-gradient(to right, #e5e9f0 1px, transparent 1px);}
+#programGantt .pg-weekend-shade {position: absolute; inset: 0; pointer-events: none;}
+#programGantt .pg-bar-label {position: relative; display: block; padding: 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 34px; color: #fff; font-size: 12px; pointer-events: none;}
+#programGantt .pg-bar:hover {filter: brightness(1.07); box-shadow: 0 2px 5px #172b4d26;}
+@media (max-width: 900px) {
+    #programGantt {padding: 10px;}
+    #programGantt .pg-viewport {height: calc(100vh - 390px);}
+    #programGantt .pg-capabilities {flex-wrap: wrap;}
+}
+
+#programGantt .pg-task-meta .pg-type {margin-right: 0;}
+#programGantt .pg-task-meta > span {flex-shrink: 0;}
+#programGantt .pg-task-meta .pg-detail {flex-shrink: 1;}
+#programGantt .pg-detail {min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;}
+#programGantt .pg-detail-progress {flex-shrink: 0;}

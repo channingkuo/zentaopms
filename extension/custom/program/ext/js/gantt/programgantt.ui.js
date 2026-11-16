@@ -3,7 +3,8 @@
 {
     'use strict';
     const DAY = 86400000;
-    const HEIGHT = 36;
+    const HEIGHT = 56;
+    const HEADER_HEIGHT = 64;
     const COLORS = {program: '#7352bf', project: '#2878c8', execution: '#129887', task: '#5686a6'};
     const date = value =>
     {
@@ -97,6 +98,25 @@
         return output;
     }
 
+    /* Keep full dates in tooltips; compact labels fit the visible calendar cells. */
+    function calendarBands(start, finish, scale, locale = 'en')
+    {
+        const daily = scale === 'day', monthlyGroups = daily || scale === 'week';
+        const format = (time, options) => new Intl.DateTimeFormat(locale, {...options, timeZone: 'UTC'}).format(time);
+        const major = monthlyGroups ? ticks(start, finish, 'month') : [];
+        if(!monthlyGroups)
+        {
+            for(let year = new Date(start).getUTCFullYear(); year <= new Date(finish).getUTCFullYear(); year++)
+                major.push({start: Math.max(start, Date.UTC(year, 0, 1)), end: Math.min(finish + DAY, Date.UTC(year + 1, 0, 1)), label: String(year)});
+        }
+        else major.forEach(tick => { tick.label = format(tick.start, {year: 'numeric', month: 'long'}); });
+        const minor = ticks(start, finish, daily ? 'day' : scale).map(tick => ({...tick,
+            label: daily ? String(new Date(tick.start).getUTCDate()) : scale === 'week' ? format(tick.start, {month: 'numeric', day: 'numeric'}) + '–' + format(tick.end - DAY, {month: 'numeric', day: 'numeric'}) : scale === 'quarter' ? 'Q' + Math.ceil((new Date(tick.start).getUTCMonth() + 1) / 3) : format(tick.start, {month: 'short'}),
+            weekday: daily ? format(tick.start, {weekday: 'short'}) : '',
+            weekend: daily && [0, 6].includes(new Date(tick.start).getUTCDay())}));
+        return {major, minor};
+    }
+
     /** A small PDF 1.4 writer: each page embeds a local JPEG, preserving CJK glyphs. */
     function makePDF(pages)
     {
@@ -127,7 +147,7 @@
         return new Blob(chunks, {type: 'application/pdf'});
     }
 
-    const api = {date, iso, days, validRange, visibleRows, ticks, makePDF};
+    const api = {date, iso, days, validRange, visibleRows, ticks, calendarBands, makePDF};
     if(typeof module !== 'undefined' && module.exports) module.exports = api;
     if(!global.document) return;
 
@@ -139,18 +159,22 @@
         const dates = nodes.flatMap(node => [date(node.begin), date(node.end)]).filter(value => value !== null);
         const first = dates.length ? dates.reduce((a, b) => Math.min(a, b)) : today() - 14 * DAY;
         const last = dates.length ? dates.reduce((a, b) => Math.max(a, b)) : today() + 60 * DAY;
-        const state = {scope: options.programID ? 'p' + options.programID : '', status: 'all', scale: 'month', search: '',
+        const state = {scope: options.programID ? 'p' + options.programID : '', status: 'all', scale: 'week', search: '',
             executions: true, tasks: true, dates: true, owner: true, statusField: true, progress: true, editing: false,
             begin: iso(Math.max(Date.UTC(1900, 0, 1), first - 7 * DAY)), end: iso(Math.min(Date.UTC(2099, 11, 31), last + 14 * DAY, first + 3650 * DAY)), collapsed: new Set(), busy: false};
         const el = (tag, className, text) => { const item = document.createElement(tag); if(className) item.className = className; if(text !== undefined) item.textContent = text; return item; };
         const button = (text, action) => { const item = el('button', 'btn size-sm', text); item.type = 'button'; item.addEventListener('click', action); return item; };
         const toolbar = el('div', 'pg-toolbar');
         const controls = el('div', 'pg-toolbar');
+        const viewbar = el('div', 'pg-viewbar');
+        const countLabel = el('span', 'pg-count');
+        const viewButtons = el('div', 'pg-views'); viewButtons.setAttribute('role', 'group'); viewButtons.setAttribute('aria-label', lang.view);
+        viewbar.append(countLabel, viewButtons);
         const notice = el('p', 'pg-notice'); notice.setAttribute('role', 'status'); notice.setAttribute('aria-live', 'polite');
         const viewport = el('div', 'pg-viewport'); viewport.tabIndex = 0;
         const grid = el('div', 'pg-grid'); viewport.append(grid);
         const dialog = el('dialog', 'pg-dialog');
-        root.replaceChildren(toolbar, controls, notice, viewport, dialog);
+        root.replaceChildren(toolbar, controls, notice, viewbar, viewport, dialog);
         const message = (text, error = false) => { notice.textContent = text; notice.classList.toggle('pg-error', error); };
         const labeled = (container, text, input) => { const label = el('label', 'pg-control'); label.append(el('span', '', text), input); container.append(label); };
         const select = (container, label, values, initial, onChange) =>
@@ -161,7 +185,12 @@
         };
         const scopeSelect = select(toolbar, lang.program, [['', lang.all], ...nodes.filter(node => node.type === 'program').map(node => [node.id, node.name])], state.scope, value => { state.scope = value; render(); });
         select(toolbar, lang.status, ['all','unclosed','wait','doing','suspended','closed'].map(value => [value, lang[value === 'all' ? 'allStatus' : value]]), state.status, value => { state.status = value; render(); });
-        select(toolbar, '', ['day','week','month','quarter'].map(value => [value, lang[value]]), state.scale, value => { state.scale = value; render(); });
+        ['day','week','month','quarter'].forEach(value =>
+        {
+            const item = button(lang[value], () => { state.scale = value; render(); });
+            item.dataset.scale = value; viewButtons.append(item);
+        });
+        viewbar.append(button(lang.today, focusToday));
         const search = el('input', 'form-control'); search.type = 'search'; search.placeholder = lang.search;
         let searchTimer;
         search.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { state.search = search.value; render(); }, 150); });
@@ -189,7 +218,7 @@
         const fieldPanel = el('div', 'pg-field-panel'); fields.append(fieldPanel); controls.append(fields);
         checkbox(lang.owner, 'owner', fieldPanel); checkbox(lang.status, 'statusField', fieldPanel); checkbox(lang.progress, 'progress', fieldPanel);
         controls.append(button(lang.expand, () => { state.collapsed.clear(); render(); }), button(lang.collapse, () => { nodes.forEach(node => state.collapsed.add(node.id)); render(); }));
-        controls.append(button(lang.fullscreen, async () =>
+        viewbar.append(button(lang.fullscreen, async () =>
         {
             try { if(document.fullscreenElement) await document.exitFullscreen(); else await root.requestFullscreen(); }
             catch(error) { message(error.message, true); }
@@ -210,7 +239,7 @@
             if(state.busy || disposed) return;
             state.busy = true;
             message(lang.refreshing);
-            const inputs = [...root.querySelectorAll('.pg-toolbar input,.pg-toolbar select,.pg-toolbar button')];
+            const inputs = [...root.querySelectorAll('.pg-toolbar input,.pg-toolbar select,.pg-toolbar button,.pg-viewbar button')];
             inputs.forEach(input => { input.disabled = true; });
             try
             {
@@ -233,13 +262,28 @@
             finally { state.busy = false; inputs.forEach(input => { input.disabled = false; }); }
         }
 
-        const columns = () => [{key: 'name', text: lang.name, width: 300},
-            ...(state.owner ? [{key: 'owner', text: lang.owner, width: 115}] : []),
-            ...(state.statusField ? [{key: 'status', text: lang.status, width: 95}] : []),
-            ...(state.progress ? [{key: 'progress', text: lang.progress, width: 75}] : []),
-            ...(state.dates ? [{key: 'begin', text: lang.begin, width: 115}, {key: 'end', text: lang.end, width: 115}] : [])];
-        const textValue = (row, key) => key === 'status' ? (lang[row.status] || row.status) : key === 'progress' ? row.progress + '%' : row[key] || '—';
-        const scaleWidth = () => ({day: 32, week: 100 / 7, month: 120 / 30, quarter: 160 / 91})[state.scale];
+        const columns = () => [{key: 'name', text: lang.name, width: 340}, {key: 'duration', text: lang.duration, width: 80}];
+        const duration = row => date(row.begin) !== null && date(row.end) !== null && row.end >= row.begin ? String(days(date(row.begin), date(row.end)) + 1) + ' ' + lang.days : '—';
+        const textValue = (row, key) => key === 'duration' ? duration(row) : key === 'status' ? (lang[row.status] || row.status || '—') : key === 'progress' ? (row.progress === undefined || row.progress === null ? '—' : row.progress + '%') : row[key] || '—';
+        const rowDetails = row => ({
+            top: [
+                ...(state.owner ? [{key: 'owner', text: lang.owner + ': ' + textValue(row, 'owner')}] : []),
+                ...(state.statusField ? [{key: 'status', text: lang.status + ': ' + textValue(row, 'status')}] : [])],
+            bottom: [
+                ...(state.dates ? [{key: 'begin', text: textValue(row, 'begin'), label: lang.begin}, {key: 'end', text: '→ ' + textValue(row, 'end'), label: lang.end}] : []),
+                ...(state.progress ? [{key: 'progress', text: lang.progress + ': ' + textValue(row, 'progress')}] : [])]
+        });
+        const calendarText = (tick, level, width) =>
+        {
+            if(level === 'major' && width < 65) return String(new Date(tick.start).getUTCMonth() + 1);
+            if(level === 'minor' && state.scale === 'week' && width < 85)
+            {
+                const from = new Date(tick.start).getUTCDate(), to = new Date(tick.end - DAY).getUTCDate();
+                return String(from) + (tick.end - tick.start > DAY ? '–' + to : '');
+            }
+            return tick.label + (tick.weekday ? ' ' + tick.weekday : '');
+        };
+        const scaleWidth = () => ({day: 72, week: 24, month: 120 / 30, quarter: 160 / 91})[state.scale];
         let rows = [], header, content, leftWidth, timelineWidth, px, rangeStart, rangeEnd;
         const geometry = row =>
         {
@@ -247,6 +291,18 @@
             if(begin === null || end === null || end < begin || end < rangeStart || begin > rangeEnd) return null;
             return {left: days(rangeStart, Math.max(begin, rangeStart)) * px, width: Math.max(3, (days(Math.max(begin, rangeStart), Math.min(end, rangeEnd)) + 1) * px), begin, end};
         };
+        function focusToday()
+        {
+            const now = today(), span = days(date(state.begin), date(state.end));
+            if(now < date(state.begin) || now > date(state.end))
+            {
+                const start = Math.max(Date.UTC(1900, 0, 1), Math.min(now - Math.min(7, span) * DAY, Date.UTC(2099, 11, 31) - span * DAY));
+                state.begin = iso(start); state.end = iso(start + span * DAY);
+                dateControls[0].value = state.begin; dateControls[1].value = state.end;
+                render();
+            }
+            viewport.scrollLeft = Math.max(0, days(rangeStart, now) * px - Math.max(0, viewport.clientWidth - leftWidth) / 2);
+        }
         function render()
         {
             if(disposed || !root.isConnected) return;
@@ -260,10 +316,22 @@
             const fixed = el('div', 'pg-fixed pg-heading'); fixed.style.width = leftWidth + 'px';
             cols.forEach(col => { const cell = el('div', 'pg-cell', col.text); cell.style.width = col.width + 'px'; fixed.append(cell); }); header.append(fixed);
             const scale = el('div', 'pg-scale'); scale.style.width = timelineWidth + 'px';
-            ticks(rangeStart, rangeEnd, state.scale).forEach(tick =>
+            const bands = calendarBands(rangeStart, rangeEnd, state.scale, lang.locale);
+            ['major', 'minor'].forEach(level => bands[level].forEach(tick =>
             {
-                const label = el('div', 'pg-tick', tick.label); label.style.left = (days(rangeStart, tick.start) * px) + 'px'; label.style.width = (days(tick.start, tick.end) * px) + 'px'; scale.append(label);
-            }); header.append(scale);
+                const width = days(tick.start, tick.end) * px;
+                const text = level === 'minor' && tick.weekday ? tick.label : calendarText(tick, level, width);
+                const label = el('div', 'pg-tick pg-' + level, text);
+                label.style.left = (days(rangeStart, tick.start) * px) + 'px'; label.style.width = (days(tick.start, tick.end) * px) + 'px';
+                label.title = iso(tick.start) + ' → ' + iso(tick.end - DAY);
+                if(tick.weekday) label.append(el('span', 'pg-weekday', tick.weekday));
+                if(tick.weekend) label.classList.add('pg-weekend');
+                if(level === 'minor' && today() >= tick.start && today() < tick.end) label.classList.add('pg-current');
+                scale.append(label);
+            })); header.append(scale);
+            viewButtons.querySelectorAll('button').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.scale === state.scale)));
+            countLabel.textContent = rows.length + ' ' + lang.count;
+
             content = el('div', 'pg-content'); content.style.height = Math.max(HEIGHT, rows.length * HEIGHT) + 'px';
             grid.replaceChildren(header, content);
             viewport.scrollTop = scroll.top; viewport.scrollLeft = scroll.left;
@@ -274,12 +342,12 @@
         {
             if(!content) return;
             const fragment = document.createDocumentFragment();
-            const start = Math.max(0, Math.floor((viewport.scrollTop - HEIGHT) / HEIGHT) - 8);
+            const start = Math.max(0, Math.floor((viewport.scrollTop - HEADER_HEIGHT) / HEIGHT) - 8);
             const end = Math.min(rows.length, start + Math.ceil(viewport.clientHeight / HEIGHT) + 18);
             if(!rows.length) fragment.append(el('div', 'pg-empty', lang.empty));
             for(let i = start; i < end; i++)
             {
-                const row = rows[i], line = el('div', 'pg-row'); line.style.top = (i * HEIGHT) + 'px'; line.dataset.id = row.id;
+                const row = rows[i], line = el('div', 'pg-row'); line.style.top = (i * HEIGHT) + 'px'; line.dataset.id = row.id; line.classList.toggle('pg-alternate', i % 2 === 1);
                 const fixed = el('div', 'pg-fixed'); fixed.style.width = leftWidth + 'px';
                 columns().forEach(col =>
                 {
@@ -292,7 +360,24 @@
                             const toggle = button(state.collapsed.has(row.id) ? '▸' : '▾', () => { if(state.collapsed.has(row.id)) state.collapsed.delete(row.id); else state.collapsed.add(row.id); render(); });
                             toggle.className = 'pg-toggle'; toggle.setAttribute('aria-expanded', String(!state.collapsed.has(row.id))); toggle.setAttribute('aria-label', row.name); cell.append(toggle);
                         }
-                        const type = el('span', 'pg-type', lang[row.type]); type.style.color = COLORS[row.type]; cell.append(type, el('span', 'pg-name', row.name));
+                        const info = el('div', 'pg-task-info');
+                        const meta = el('div', 'pg-task-meta');
+                        const type = el('span', 'pg-type', lang[row.type]); type.style.color = COLORS[row.type];
+                        meta.append(type, el('span', '', '#' + row.objectID));
+                        const details = rowDetails(row);
+                        const detailLine = (container, values) => values.forEach(detail =>
+                        {
+                            const item = el('span', 'pg-detail pg-detail-' + detail.key, detail.text);
+                            item.title = detail.label ? detail.label + ': ' + textValue(row, detail.key) : detail.text;
+                            container.append(item);
+                        });
+                        detailLine(meta, details.top);
+                        info.append(meta, el('span', 'pg-name', row.name));
+                        if(details.bottom.length)
+                        {
+                            const schedule = el('div', 'pg-task-schedule'); detailLine(schedule, details.bottom); info.append(schedule);
+                        }
+                        cell.append(info);
                         if(options.canEdit && state.editing && row.editable)
                         {
                             const edit = button('✎', () => editDates(row)); edit.className = 'pg-date-edit'; edit.title = lang.editDates; edit.setAttribute('aria-label', lang.editDates + ': ' + row.name); cell.append(edit);
@@ -302,12 +387,22 @@
                     cell.title = textValue(row, col.key); fixed.append(cell);
                 }); line.append(fixed);
                 const track = el('div', 'pg-track'); track.style.width = timelineWidth + 'px';
+                track.style.backgroundSize = (state.scale === 'day' ? px : state.scale === 'week' ? 7 * px : 0) + 'px 100%';
+                if(state.scale === 'week') track.style.backgroundPositionX = (-((new Date(rangeStart).getUTCDay() + 6) % 7) * px) + 'px';
+                if(state.scale === 'day')
+                {
+                    const weekend = el('div', 'pg-weekend-shade');
+                    weekend.style.backgroundSize = (7 * px) + 'px 100%';
+                    weekend.style.backgroundImage = 'linear-gradient(to right, #f1f5f980 ' + (2 * px) + 'px, transparent ' + (2 * px) + 'px)';
+                    weekend.style.backgroundPositionX = (-((new Date(rangeStart).getUTCDay() + 1) % 7) * px) + 'px';
+                    track.append(weekend);
+                }
                 const bar = geometry(row);
                 if(bar)
                 {
                     const item = el('div', 'pg-bar'); item.style.left = bar.left + 'px'; item.style.width = bar.width + 'px'; item.style.backgroundColor = COLORS[row.type];
                     item.title = row.name + ' · ' + row.begin + ' → ' + row.end + ' · ' + row.progress + '%';
-                    const fill = el('span', 'pg-bar-progress'); fill.style.width = row.progress + '%'; item.append(fill);
+                    const fill = el('span', 'pg-bar-progress'); fill.style.width = row.progress + '%'; item.append(fill, el('span', 'pg-bar-label', row.name));
                     if(options.canEdit && state.editing && row.editable)
                     {
                         item.classList.add('pg-draggable'); item.tabIndex = 0; item.setAttribute('role', 'button'); item.setAttribute('aria-label', lang.editDates + ': ' + item.title);
@@ -320,7 +415,7 @@
                 }
                 else if(!row.begin || !row.end) track.append(el('span', 'pg-unscheduled', lang.unscheduled));
                 const now = days(rangeStart, today()) * px;
-                if(now >= 0 && now <= timelineWidth) { const marker = el('span', 'pg-today'); marker.style.left = now + 'px'; marker.title = lang.today; track.append(marker); }
+                if(now >= 0 && now <= timelineWidth) { const marker = el('span', 'pg-today'); marker.style.left = now + 'px'; marker.style.width = px + 'px'; marker.title = lang.today; track.append(marker); }
                 line.append(track); fragment.append(line);
             }
             content.replaceChildren(fragment);
@@ -404,42 +499,73 @@
         {
             const cols = columns(), left = cols.reduce((total, col) => total + col.width, 0);
             const width = left + (days(start, finish) + 1) * px;
-            const canvas = document.createElement('canvas'); canvas.width = Math.ceil(width); canvas.height = 100 + Math.max(1, pageRows.length) * HEIGHT;
+            const canvas = document.createElement('canvas'); canvas.width = Math.ceil(width); canvas.height = 60 + HEADER_HEIGHT + Math.max(1, pageRows.length) * HEIGHT;
             const ctx = canvas.getContext('2d');
             if(!ctx) throw new Error(lang.exportFailed);
             ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = '#17233d'; ctx.font = 'bold 18px sans-serif'; ctx.fillText(lang.title, 14, 25);
             ctx.font = '12px sans-serif'; ctx.fillText(iso(start) + ' → ' + iso(finish) + '   ' + pageNumber + '/' + pageCount, 14, 48);
-            ctx.fillStyle = '#edf2f8'; ctx.fillRect(0, 60, width, 36);
+            ctx.fillStyle = '#edf2f8'; ctx.fillRect(0, 60, width, HEADER_HEIGHT);
             let offset = 0;
-            const cellText = (text, x, y, cellWidth) =>
+            const cellText = (text, x, y, cellWidth, color = '#253858') =>
             {
-                ctx.save(); ctx.beginPath(); ctx.rect(x + 4, y - 16, Math.max(0, cellWidth - 8), 30); ctx.clip(); ctx.fillStyle = '#253858'; ctx.fillText(text, x + 8, y); ctx.restore();
+                ctx.save(); ctx.beginPath(); ctx.rect(x + 4, y - 16, Math.max(0, cellWidth - 8), 30); ctx.clip(); ctx.fillStyle = color; let fitted = String(text);
+                if(ctx.measureText(fitted).width > cellWidth - 16)
+                {
+                    while(fitted && ctx.measureText(fitted + '…').width > cellWidth - 16) fitted = fitted.slice(0, -1);
+                    fitted = fitted ? fitted + '…' : '';
+                }
+                ctx.fillText(fitted, x + 8, y); ctx.restore();
             };
-            cols.forEach(col => { cellText(col.text, offset, 83, col.width); offset += col.width; });
-            ticks(start, finish, state.scale).forEach(tick =>
+            cols.forEach(col => { cellText(col.text, offset, 99, col.width); offset += col.width; });
+            const bands = calendarBands(start, finish, state.scale, lang.locale);
+            ['major', 'minor'].forEach((level, index) => bands[level].forEach(tick =>
             {
                 const x = left + days(start, tick.start) * px;
-                cellText(tick.label, x, 83, days(tick.start, tick.end) * px);
-                ctx.strokeStyle = '#e4e9f0'; ctx.beginPath(); ctx.moveTo(x, 60); ctx.lineTo(x, canvas.height); ctx.stroke();
-            });
+                cellText(calendarText(tick, level, days(tick.start, tick.end) * px), x, 83 + index * 32, days(tick.start, tick.end) * px);
+                ctx.strokeStyle = '#e4e9f0'; ctx.beginPath(); ctx.moveTo(x, 60 + index * 32); ctx.lineTo(x, 60 + HEADER_HEIGHT); ctx.stroke();
+            }));
             pageRows.forEach((row, i) =>
             {
-                const y = 96 + i * HEIGHT;
+                const y = 60 + HEADER_HEIGHT + i * HEIGHT;
                 if(i % 2 === 1) { ctx.fillStyle = '#f5f7fa'; ctx.fillRect(0, y, width, HEIGHT); }
+                bands.minor.forEach(tick =>
+                {
+                    const tickX = left + days(start, tick.start) * px, tickWidth = days(tick.start, tick.end) * px;
+                    if(tick.weekend) { ctx.fillStyle = '#f1f5f980'; ctx.fillRect(tickX, y, tickWidth, HEIGHT); }
+                    ctx.strokeStyle = '#e4e9f0'; ctx.beginPath(); ctx.moveTo(tickX, y); ctx.lineTo(tickX, y + HEIGHT); ctx.stroke();
+                });
+                if(today() >= start && today() <= finish)
+                {
+                    ctx.fillStyle = '#2878c812'; ctx.fillRect(left + days(start, today()) * px, y, px, HEIGHT);
+                }
                 let x = 0;
                 cols.forEach(col =>
                 {
                     const indent = col.key === 'name' ? Math.min(row.depth, 15) * 12 : 0;
-                    cellText(textValue(row, col.key), x + indent, y + 23, col.width - indent); x += col.width;
+                    if(col.key === 'name')
+                    {
+                        const details = rowDetails(row);
+                        ctx.font = '10px sans-serif';
+                        cellText([lang[row.type] + ' #' + row.objectID, ...details.top.map(item => item.text)].join('  '), x + indent, y + 15, col.width - indent, '#8492a6');
+                        ctx.font = '12px sans-serif';
+                        cellText(row.name, x + indent, y + 32, col.width - indent);
+                        ctx.font = '10px sans-serif';
+                        cellText(details.bottom.map(item => item.text).join('  '), x + indent, y + 47, col.width - indent, '#8492a6');
+                        ctx.font = '12px sans-serif';
+                    }
+                    else cellText(textValue(row, col.key), x, y + 33, col.width);
+                    x += col.width;
                 });
                 const begin = date(row.begin), end = date(row.end);
                 if(begin !== null && end !== null && end >= begin && end >= start && begin <= finish)
                 {
                     const barX = left + days(start, Math.max(start, begin)) * px;
                     const barWidth = Math.max(2, (days(Math.max(start, begin), Math.min(finish, end)) + 1) * px);
-                    ctx.fillStyle = COLORS[row.type]; ctx.fillRect(barX, y + 10, barWidth, 16);
-                    ctx.fillStyle = '#0003'; ctx.fillRect(barX, y + 10, barWidth * row.progress / 100, 16);
+                    ctx.fillStyle = COLORS[row.type]; ctx.fillRect(barX, y + 11, barWidth, 34);
+                    ctx.fillStyle = '#0003'; ctx.fillRect(barX, y + 11, barWidth * row.progress / 100, 34);
+                    ctx.save(); ctx.beginPath(); ctx.rect(barX, y + 11, barWidth, 34); ctx.clip();
+                    ctx.fillStyle = '#fff'; ctx.fillText(row.name, barX + 8, y + 33); ctx.restore();
                 }
                 else if(begin === null || end === null) cellText(lang.unscheduled, left, y + 23, width - left);
                 ctx.strokeStyle = '#e4e9f0'; ctx.beginPath(); ctx.moveTo(0, y + HEIGHT); ctx.lineTo(width, y + HEIGHT); ctx.stroke();
@@ -454,7 +580,7 @@
         {
             if(state.busy) return;
             state.busy = true; message(lang.exporting);
-            const inputs = [...toolbar.querySelectorAll('input,select,button'), ...controls.querySelectorAll('input,select,button')];
+            const inputs = [...toolbar.querySelectorAll('input,select,button'), ...controls.querySelectorAll('input,select,button'), ...viewbar.querySelectorAll('button')];
             inputs.forEach(input => { input.disabled = true; });
             try
             {
@@ -464,7 +590,7 @@
                 if(format === 'png')
                 {
                     const width = columns().reduce((total, col) => total + col.width, 0) + timelineWidth;
-                    const height = 100 + Math.max(1, exportRows.length) * HEIGHT;
+                    const height = 60 + HEADER_HEIGHT + Math.max(1, exportRows.length) * HEIGHT;
                     if(width > 16384 || height > 16384 || width * height > 40000000) throw new Error(lang.exportLarge);
                     const canvas = drawPage(exportRows, rangeStart, rangeEnd, 1, 1);
                     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));

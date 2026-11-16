@@ -31,6 +31,7 @@ fs.mkdirSync(artifacts, {recursive:true});
   await app.getByRole('searchbox').fill('');await page.waitForTimeout(250);
   await app.getByRole('button',{name:'全部折叠',exact:true}).click();assert.equal(await app.locator('.pg-row').count(),1);
   await app.getByRole('button',{name:'全部展开',exact:true}).click();
+  await app.locator('[data-scale=month]').click();
   // Move an item using the actual pointer drag and save the confirmation.
   await app.getByRole('checkbox',{name:'开启编辑',exact:true}).check();
   const task=app.locator(`.pg-row[data-id="t${state.task}"]`);
@@ -42,6 +43,7 @@ fs.mkdirSync(artifacts, {recursive:true});
   assert.equal(await dates.nth(0).inputValue(),'2026-03-03');assert.equal(await dates.nth(1).inputValue(),'2026-03-12');
   await dialog.getByRole('button',{name:'保存',exact:true}).click();await dialog.waitFor({state:'hidden'});
   await page.reload();await app.locator('.pg-row').first().waitFor();
+  await app.locator('[data-scale=month]').click();
   await app.getByRole('checkbox',{name:'开启编辑',exact:true}).check();
   // Resize the finish edge and persist an inclusive deadline.
   const resized=app.locator(`.pg-row[data-id="t${state.task}"] .pg-bar`);await resized.scrollIntoViewIfNeeded();
@@ -82,10 +84,13 @@ fs.mkdirSync(artifacts, {recursive:true});
   await app.getByRole('button',{name:'全屏',exact:true}).click();assert.equal(await page.evaluate(()=>!!document.fullscreenElement),true);
   await app.getByRole('button',{name:'全屏',exact:true}).click();assert.equal(await page.evaluate(()=>!!document.fullscreenElement),false);
   await page.screenshot({path:path.join(artifacts,'desktop.png'),fullPage:true});
-  await page.setViewportSize({width:960,height:800});await page.screenshot({path:path.join(artifacts,'compact.png'),fullPage:true});
+  await page.setViewportSize({width:960,height:800});
+  const compactBounds = await app.boundingBox();
+  assert.ok(compactBounds.x + compactBounds.width <= 960, 'plugin fits the narrow iframe despite the application minimum width');
+  await page.screenshot({path:path.join(artifacts,'compact.png'),fullPage:true});
   // Scoped route and every scale work on an actual rendered page.
   await page.goto(base+`/index.php?m=program&f=gantt&programID=${state.program}`);await app.locator('.pg-row').first().waitFor();
-  for(const scale of ['day','week','month','quarter']) {await app.locator('select').nth(2).selectOption(scale);assert.ok(await app.locator('.pg-tick').count()>0);}
+  for(const scale of ['day','week','month','quarter']) {await app.locator(`[data-scale=${scale}]`).click();assert.ok(await app.locator('.pg-tick').count()>0);}
   const reader=await browser.newContext({viewport:{width:1400,height:900}});await reader.addCookies([state.reader.cookie,{name:'lang',value:'zh-cn',domain:'127.0.0.1',path:'/'}]);
   const readPage=await reader.newPage();readPage.on('pageerror',error=>errors.push(error.stack));await readPage.goto(base+'/index.php?m=program&f=gantt');
   const readonly=readPage.frameLocator('iframe').locator('#programGantt');await readonly.locator('.pg-row').first().waitFor();
